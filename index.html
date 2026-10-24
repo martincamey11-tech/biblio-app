@@ -1,0 +1,1683 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>¿Me conviene ir a la Biblioteca? - Asistente de Disponibilidad</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    indigo: {
+                        "50": "#f0f7ff",
+                        "100": "#e0effe",
+                        "200": "#bae0fd",
+                        "300": "#7cc8fb",
+                        "400": "#36aef7",
+                        "500": "#0c93e7",
+                        "600": "#0272c4",
+                        "700": "#035ba1",
+                        "800": "#074d85",
+                        "900": "#0c416e",
+                        "950": "#082949"
+                    },
+                    slate: {
+                        "50": "#f8fafc",
+                        "100": "#f1f5f9",
+                        "200": "#e2e8f0",
+                        "300": "#cbd5e1",
+                        "400": "#94a3b8",
+                        "500": "#64748b",
+                        "600": "#475569",
+                        "700": "#334155",
+                        "800": "#1e293b",
+                        "900": "#0f172a",
+                        "950": "#020617"
+                    },
+                    mate: '#0f172a'
+                }
+            }
+        }
+    }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <style>.inp{width:100%;border:1px solid #cbd5e1;border-radius:.6rem;padding:.45rem .7rem;font-size:.8rem;background:#fff}.inp:focus{outline:2px solid #0272c4}body{background-image:url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2780%27%20height=%2740%27%3E%3Crect%20width=%2780%27%20height=%2740%27%20fill=%27%23e2e8f0%27/%3E%3Cg%20fill=%27%23bae0fd%27%3E%3Crect%20x=%272%27%20y=%272%27%20width=%2736%27%20height=%2716%27/%3E%3Crect%20x=%2742%27%20y=%272%27%20width=%2736%27%20height=%2716%27/%3E%3Crect%20x=%27-18%27%20y=%2722%27%20width=%2736%27%20height=%2716%27/%3E%3Crect%20x=%2722%27%20y=%2722%27%20width=%2736%27%20height=%2716%27/%3E%3Crect%20x=%2762%27%20y=%2722%27%20width=%2736%27%20height=%2716%27/%3E%3C/g%3E%3C/svg%3E")}</style>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .seat-grid-mini {
+            display: grid;
+            grid-template-columns: repeat(11, minmax(0, 1fr));
+            gap: 4px;
+        }
+        .seat-grid-pc {
+            display: grid;
+            grid-template-columns: repeat(11, minmax(0, 1fr));
+            gap: 4px;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col antialiased">
+
+    <!-- FLOATING PUSH NOTIFICATION TOAST -->
+    <div id="push-toast" class="hidden fixed bottom-5 right-5 z-50 max-w-sm w-full bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-700 p-4 transition-all duration-300 transform translate-y-0">
+        <div class="flex items-start justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-indigo-600 p-2 rounded-xl text-white">
+                    <i class="fa-solid fa-bell text-lg"></i>
+                </div>
+                <div>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-indigo-300">Notificación Inteligente</h4>
+                    <p id="push-toast-title" class="text-xs font-extrabold mt-0.5">Recordatorio de Asistencia</p>
+                </div>
+            </div>
+            <button onclick="dismissPushToast()" class="text-slate-400 hover:text-white text-sm"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <p id="push-toast-msg" class="text-xs text-slate-300 mt-2">Estamos evaluando el aforo de tu hora programada...</p>
+        <div class="mt-3 flex items-center space-x-2">
+            <button onclick="openCheckInModal()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-1.5 rounded-lg transition text-center"><i class="fa-solid fa-qrcode mr-1"></i>Confirmar asistencia</button>
+            <button onclick="cancelIntentionFromPush()" class="px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold py-1.5 rounded-lg border border-slate-700">Cancelar</button>
+        </div>
+    </div>
+
+    <!-- CHECK-IN MODAL -->
+    <div id="checkin-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 relative space-y-4 max-h-[92vh] overflow-y-auto">
+            <button onclick="closeCheckInModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-700 text-lg"><i class="fa-solid fa-xmark"></i></button>
+            <div class="text-center space-y-1">
+                <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto text-xl"><i class="fa-solid fa-qrcode"></i></div>
+                <h3 class="text-base font-extrabold text-slate-900">Validación de Asistencia (Check-In)</h3>
+                <p class="text-xs text-slate-500">Escanea con la cámara de tu celular el código QR de entrada de la biblioteca.</p>
+            </div>
+
+            <div class="bg-indigo-50/50 rounded-2xl p-4 border-2 border-dashed border-indigo-200 text-center space-y-3">
+                <div class="font-extrabold text-xs text-slate-800"><i class="fa-solid fa-camera text-indigo-600 mr-1"></i>Escáner QR de entrada</div>
+                <div id="qr-reader" class="w-full rounded-xl overflow-hidden bg-white border border-slate-200 min-h-[220px]"></div>
+                <p id="qr-scan-status" class="text-[10px] text-slate-500">Usa la cámara de tu celular para tomar una foto del QR de entrada, o selecciona una imagen.</p>
+                <label id="btn-mobile-camera" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md transition cursor-pointer text-center block">
+                    <i class="fa-solid fa-camera mr-1.5"></i>Escanear desde foto / cámara
+                    <input id="qr-file-input" type="file" accept="image/*" capture="environment" class="hidden" onchange="scanQRFromFile(event)">
+                </label>
+                <button onclick="simulateLibraryEntry()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 rounded-xl text-xs shadow-md transition"><i class="fa-solid fa-door-open mr-1.5"></i>Simular entrada a la biblioteca</button>
+            </div>
+
+            <div id="checkin-alert" class="hidden p-3 bg-sky-50 border border-sky-200 text-sky-900 text-xs rounded-xl flex items-center space-x-2">
+                <i class="fa-solid fa-circle-check text-sky-600 text-base shrink-0"></i>
+                <span id="checkin-alert-text">¡Asistencia confirmada exitosamente!</span>
+            </div>
+        </div>
+    </div>
+
+    <header class="bg-slate-900 text-white border-b-4 border-indigo-500 sticky top-0 z-50 shadow-md">
+        <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="bg-indigo-600 p-2 rounded-xl text-white shadow-lg shadow-indigo-600/30">
+                    <i class="fa-solid fa-book-reader text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-base font-bold tracking-tight">BiblioIng &bull; ¿Paso a la Biblio?</h1>
+                    <p class="text-xs text-sky-200/80">Asistente de Disponibilidad en Tiempo Real &bull; 66 Puestos</p>
+                </div>
+            </div>
+
+            <!-- Tab Toggle Buttons -->
+            <div class="flex bg-slate-800/80 p-1 rounded-xl border border-slate-700/80 max-w-full overflow-x-auto space-x-1">
+                <button id="btn-tab-student" onclick="switchTab('student')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow">
+                    <i class="fa-solid fa-user-graduate mr-1.5"></i>Estudiante
+                </button>
+                <button id="btn-tab-intention" onclick="switchTab('intention')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-300 hover:text-white">
+                    <i class="fa-solid fa-calendar-plus mr-1.5"></i>Voy a ir
+                </button>
+                <button id="btn-tab-notifications" onclick="switchTab('notifications')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-300 hover:text-white relative whitespace-nowrap">
+                    <i class="fa-solid fa-bell mr-1.5"></i>Alertas & Puntos
+                    <span id="puntos-badge" class="ml-1 px-1.5 py-0.5 bg-sky-400 text-slate-950 rounded-full text-[10px] font-black">150 pts</span>
+                </button>
+                <button id="btn-tab-admin" onclick="switchTab('admin')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-300 hover:text-white">
+                    <i class="fa-solid fa-calculator mr-1.5"></i>Cómo funciona
+                </button>
+                <button id="btn-tab-reports" onclick="switchTab('reports')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-300 hover:text-white whitespace-nowrap">
+                    <i class="fa-solid fa-flag mr-1.5"></i>Reportes
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-5xl w-full mx-auto px-4 py-6">
+
+        <!-- ========================================== -->
+        <!-- VIEW 1: STUDENT DECISION ASSISTANT -->
+        <!-- ========================================== -->
+        <div id="view-student" class="space-y-6">
+
+            <!-- Time & Day Selector Strip -->
+            <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="flex items-center space-x-2 text-slate-700 text-xs font-bold uppercase tracking-wider">
+                    <i class="fa-regular fa-calendar-check text-indigo-600 text-base"></i>
+                    <span>Consulta de Horario:</span>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                    <button onclick="setCurrentTime()" class="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-bold transition border border-indigo-200 flex items-center">
+                        <i class="fa-solid fa-clock-rotate-left mr-1.5"></i>Ahora Mismo
+                    </button>
+
+                    <select id="day-select" onchange="recalculateStudentView()" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none">
+                        <option value="1">Lunes a Viernes</option>
+                        <option value="6">Sábado</option>
+                    </select>
+
+                    <div class="flex items-center space-x-2">
+                        <input type="range" id="hour-slider" min="7" max="18" step="1" value="10" oninput="recalculateStudentView()" class="w-28 sm:w-36 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                        <span id="hour-display" class="text-xs font-black bg-slate-900 text-white px-2.5 py-1 rounded-md min-w-[65px] text-center">10:00 AM</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Recommendation Semaphore -->
+            <div id="semaphore-card" class="rounded-3xl p-6 sm:p-8 text-white shadow-lg transition-all duration-300 border bg-gradient-to-br from-indigo-600 via-sky-600 to-indigo-800 border-indigo-400">
+                <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div class="flex items-center space-x-5 text-center sm:text-left">
+                        <div id="semaphore-icon-box" class="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-4xl sm:text-5xl shadow-inner shrink-0">
+                            <i id="semaphore-icon" class="fa-solid fa-thumbs-up"></i>
+                        </div>
+                        <div>
+                            <div class="inline-flex items-center space-x-2 bg-slate-900/30 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-2">
+                                <span id="semaphore-badge">DISPONIBILIDAD ALTA</span>
+                            </div>
+                            <h2 id="semaphore-title" class="text-2xl sm:text-3xl font-black tracking-tight leading-tight">¡Sí, conviene ir ahora!</h2>
+                            <p id="semaphore-advice" class="text-sm opacity-90 mt-1 font-medium max-w-lg">Encontrarás puestos libres tanto en cubículos de estudio como en computadoras sin ningún tiempo de espera.</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-900/30 backdrop-blur-md p-4 rounded-2xl text-center min-w-[140px] border border-white/10 shrink-0">
+                        <span class="text-[10px] uppercase font-bold tracking-wider opacity-80 block">Ocupación Est.</span>
+                        <span id="semaphore-occupancy-pct" class="text-3xl sm:text-4xl font-black">35%</span>
+                        <span id="semaphore-occupancy-count" class="text-xs font-semibold block mt-0.5 opacity-90">23 / 66 Puestos</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resource Breakdown -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                
+                <!-- Cubicles Card -->
+                <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between space-y-4">
+                    <div>
+                        <div class="flex justify-between items-start">
+                            <div class="flex items-center space-x-3">
+                                <div class="bg-sky-50 text-indigo-600 p-2.5 rounded-xl border border-sky-100">
+                                    <i class="fa-solid fa-cubes text-lg"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-slate-900 text-sm">Cubículos y Mesas de Estudio</h3>
+                                    <p class="text-xs text-slate-500">55 Puestos Individuales</p>
+                                </div>
+                            </div>
+                            <span id="cubicles-badge" class="px-2.5 py-1 rounded-full text-xs font-bold bg-sky-100 text-indigo-800">
+                                ~38 Libres
+                            </span>
+                        </div>
+
+                        <div class="mt-4 space-y-2">
+                            <div class="flex justify-between text-xs font-semibold">
+                                <span class="text-slate-600">Disponibilidad Estimada:</span>
+                                <span id="cubicles-pct-text" class="text-slate-900 font-bold">69% Libre</span>
+                            </div>
+                            <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                                <div id="cubicles-bar" class="bg-indigo-600 h-full transition-all duration-500" style="width: 31%;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <span class="text-[10px] uppercase font-bold text-slate-400 block mb-2">Mapa Esquemático (55 Puestos)</span>
+                        <div id="grid-cubicles" class="seat-grid-mini bg-slate-50 p-2.5 rounded-xl border border-slate-200 max-h-28 overflow-y-auto"></div>
+                    </div>
+                </div>
+
+                <!-- PCs Card -->
+                <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between space-y-4">
+                    <div>
+                        <div class="flex justify-between items-start">
+                            <div class="flex items-center space-x-3">
+                                <div class="bg-sky-50 text-indigo-600 p-2.5 rounded-xl border border-sky-100">
+                                    <i class="fa-solid fa-desktop text-lg"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-slate-900 text-sm">Sala de Computadoras / Internet</h3>
+                                    <p class="text-xs text-slate-500">11 Equipos PC</p>
+                                </div>
+                            </div>
+                            <span id="pcs-badge" class="px-2.5 py-1 rounded-full text-xs font-bold bg-sky-100 text-indigo-800">
+                                ~7 Libres
+                            </span>
+                        </div>
+
+                        <div class="mt-4 space-y-2">
+                            <div class="flex justify-between text-xs font-semibold">
+                                <span class="text-slate-600">Disponibilidad Estimada:</span>
+                                <span id="pcs-pct-text" class="text-slate-900 font-bold">64% Libre</span>
+                            </div>
+                            <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                                <div id="pcs-bar" class="bg-indigo-400 h-full transition-all duration-500" style="width: 36%;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <span class="text-[10px] uppercase font-bold text-slate-400 block mb-2">Mapa Esquemático (11 PCs)</span>
+                        <div id="grid-pcs" class="seat-grid-pc bg-slate-50 p-2.5 rounded-xl border border-slate-200"></div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div id="best-hours" class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm"></div>
+
+            <!-- Daily Hourly Curve Chart -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div>
+                        <h3 class="font-bold text-slate-900 text-sm flex items-center">
+                            <i class="fa-solid fa-chart-line text-indigo-600 mr-2"></i>Curva Diaria de Afluencia & Mejores Horas
+                        </h3>
+                        <p class="text-xs text-slate-500">Pronóstico de demanda en el día seleccionado (07:00 a 19:00 hrs)</p>
+                    </div>
+                    <div class="flex items-center space-x-3 text-xs font-semibold">
+                        <span class="flex items-center"><span class="w-3 h-3 rounded-full bg-indigo-600 inline-block mr-1"></span> Ocupantes esperados</span>
+                        <span class="flex items-center"><span class="w-3 h-3 rounded-full bg-sky-400 inline-block mr-1"></span> Capacidad Límite (66)</span>
+                    </div>
+                </div>
+
+                <div class="h-44 w-full">
+                    <canvas id="studentHourlyChart"></canvas>
+                </div>
+            </div>
+
+        </div>
+
+
+        <!-- ========================================================================= -->
+        <!-- VIEW 2: PESTAÑA "INTENCIÓN DE ASISTENCIA" -->
+        <!-- ========================================================================= -->
+        <div id="view-intention" class="hidden space-y-6">
+
+            <!-- FORMULARIO DE CAPTURA DE INTENCIÓN -->
+            <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-5">
+                <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
+                    <div>
+                        <h2 class="text-base font-extrabold text-slate-900 flex items-center">
+                            <i class="fa-solid fa-calendar-plus text-indigo-600 mr-2.5 text-lg"></i>Registro de Intención del Estudiante
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-0.5">Registra cuándo piensas ir a la biblioteca para calcular la proyección de aforo.</p>
+                    </div>
+                    <span class="bg-indigo-50 text-indigo-700 text-[11px] font-bold px-3 py-1 rounded-full border border-indigo-100">
+                        Formulario
+                    </span>
+                </div>
+
+                <form id="form-intention" onsubmit="handleIntentionSubmit(event)" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                        <label for="intent-date" class="block text-xs font-bold text-slate-700 mb-1">Fecha</label>
+                        <input type="date" id="intent-date" required class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none">
+                    </div>
+
+                    <div>
+                        <label for="intent-time" class="block text-xs font-bold text-slate-700 mb-1">Hora Proyectada de Llegada</label>
+                        <select id="intent-time" required class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none">
+                            <option value="7">07:00 AM</option>
+                            <option value="8">08:00 AM</option>
+                            <option value="9">09:00 AM</option>
+                            <option value="10" selected>10:00 AM</option>
+                            <option value="11">11:00 AM</option>
+                            <option value="12">12:00 PM</option>
+                            <option value="13">01:00 PM</option>
+                            <option value="14">02:00 PM</option>
+                            <option value="15">03:00 PM</option>
+                            <option value="16">04:00 PM</option>
+                            <option value="17">05:00 PM</option>
+                            <option value="18">06:00 PM</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="intent-duration" class="block text-xs font-bold text-slate-700 mb-1">Tiempo Est. Permanencia (Min)</label>
+                        <input type="number" id="intent-duration" min="15" max="360" step="15" value="60" required class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none">
+                    </div>
+
+                    <div>
+                        <label for="intent-purpose" class="block text-xs font-bold text-slate-700 mb-1">Propósito de Visita</label>
+                        <select id="intent-purpose" required class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none">
+                            <option value="individual">Estudio individual silencioso</option>
+                            <option value="group">Trabajo colaborativo en equipo</option>
+                            <option value="pc">Uso de computadoras o laboratorios</option>
+                        </select>
+                    </div>
+
+                    <div class="md:col-span-2 lg:col-span-4 pt-1">
+                        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition shadow-md shadow-indigo-600/20 flex items-center justify-center space-x-2">
+                            <i class="fa-solid fa-paper-plane"></i>
+                            <span>Guardar Registro y Programar Alerta</span>
+                        </button>
+                    </div>
+                </form>
+
+                <div id="intention-alert" class="hidden p-3 bg-sky-50 border border-sky-200 text-sky-900 text-xs font-semibold rounded-xl flex items-center space-x-2">
+                    <i class="fa-solid fa-circle-check text-sky-600 text-base"></i>
+                    <span id="intention-alert-text">¡Registro guardado! La alerta se programará antes de tu hora de llegada.</span>
+                </div>
+            </div>
+
+            <!-- GRÁFICO DE AFORO -->
+            <div class="space-y-6">
+                
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-base font-extrabold text-slate-900 flex items-center">
+                            <i class="fa-solid fa-chart-line text-indigo-600 mr-2"></i>Gráfico de Aforo y Asistente "¿Vale la pena ir?"
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-0.5">Muestra la afluencia estimada basada en la suma de intenciones registradas y datos históricos.</p>
+                    </div>
+                    <span class="bg-indigo-50 text-indigo-700 text-[11px] font-bold px-3 py-1 rounded-full border border-indigo-100">
+                        Proyección
+                    </span>
+                </div>
+
+                <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-3">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                        <h3 class="font-bold text-slate-900 text-sm">
+                            Curva de Afluencia Proyectada por Hora (07:00 a 19:00 hrs)
+                        </h3>
+                        <div class="flex items-center space-x-3 text-xs font-semibold">
+                            <span class="flex items-center"><span class="w-3 h-3 rounded-full bg-indigo-600 inline-block mr-1"></span> Aforo Est.</span>
+                            <span class="flex items-center"><span class="w-3 h-3 rounded-full bg-sky-400 border border-indigo-700 inline-block mr-1"></span> Tu Registro</span>
+                            <span class="flex items-center"><span class="w-3 h-3 rounded-full bg-sky-500 inline-block mr-1"></span> Moderado (70%)</span>
+                            <span class="flex items-center"><span class="w-3 h-3 rounded-full bg-indigo-900 inline-block mr-1"></span> No Recomendado (85%)</span>
+                        </div>
+                    </div>
+
+                    <div class="h-56 w-full">
+                        <canvas id="intentionHourlyChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Recommended Status Semaphore -->
+                <div id="intention-semaphore-card" class="rounded-3xl p-6 sm:p-8 text-white shadow-lg transition-all duration-300 border bg-gradient-to-br from-indigo-600 via-sky-600 to-indigo-800 border-indigo-400">
+                    <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+                        <div class="flex items-center space-x-5 text-center sm:text-left">
+                            <div id="intention-semaphore-icon-box" class="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-4xl sm:text-5xl shadow-inner shrink-0">
+                                <i id="intention-semaphore-icon" class="fa-solid fa-thumbs-up"></i>
+                            </div>
+                            <div>
+                                <div class="inline-flex items-center space-x-2 bg-slate-900/30 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-2">
+                                    <span id="intention-semaphore-badge">RECOMENDADO (&lt; 70%)</span>
+                                </div>
+                                <h2 id="intention-semaphore-title" class="text-2xl sm:text-3xl font-black tracking-tight leading-tight">¡Sí, vale la pena ir!</h2>
+                                <p id="intention-semaphore-advice" class="text-sm opacity-90 mt-1 font-medium max-w-lg">Menos del 70% de ocupación esperada. Encontrarás puestos libres en las instalaciones.</p>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900/30 backdrop-blur-md p-4 rounded-2xl text-center min-w-[140px] border border-white/10 shrink-0">
+                            <span class="text-[10px] uppercase font-bold tracking-wider opacity-80 block">Ocupación Estimada</span>
+                            <span id="intention-semaphore-pct" class="text-3xl sm:text-4xl font-black">35%</span>
+                            <span id="intention-semaphore-count" class="text-xs font-semibold block mt-0.5 opacity-90">23 / 66 Puestos</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Intention Registrations Database Table -->
+                <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-3">
+                    <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Registros de Intención guardados en este dispositivo</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs text-slate-600">
+                            <thead class="bg-slate-50 text-slate-700 uppercase font-bold text-[10px]">
+                                <tr>
+                                    <th class="p-2.5 border-b">Fecha</th>
+                                    <th class="p-2.5 border-b">Hora Proyectada</th>
+                                    <th class="p-2.5 border-b">Permanencia</th>
+                                    <th class="p-2.5 border-b">Propósito</th><th class="p-2.5 border-b">Alerta</th>
+                                </tr>
+                            </thead>
+                            <tbody id="intentions-table-body" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- ========================================================================= -->
+        <!-- VIEW 2.5: NOTIFICACIONES INTELIGENTES, CHECK-IN Y RECOMPENSAS (PERSONA 2) -->
+        <!-- ========================================================================= -->
+        <div id="view-notifications" class="hidden space-y-6">
+
+            <!-- Banner Resumen de Puntos y Nivel de Estudiante -->
+            <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 text-white shadow-xl border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-6">
+                <div class="flex items-center space-x-4">
+                    <div class="w-16 h-16 rounded-2xl bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-300 text-3xl shadow-inner shrink-0">
+                        <i class="fa-solid fa-award"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xs font-bold bg-sky-400 text-slate-950 px-2 py-0.5 rounded-md uppercase tracking-wider">Perfil Universitario</span>
+                            <span class="text-xs text-slate-400">&bull; Nivel 2: Estudiante Frecuente</span>
+                        </div>
+                        <h2 class="text-xl font-black mt-1">Programa de Incentivos Estudiantiles</h2>
+                        <p class="text-xs text-slate-300 mt-0.5">Confirma tu asistencia con QR para acumular puntos y canjear beneficios 100% gratuitos.</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-4 shrink-0">
+                    <div class="bg-white/10 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/10 text-center">
+                        <span class="text-[10px] uppercase font-bold tracking-wider opacity-75 block">Puntos Disponibles</span>
+                        <span id="user-points-display" class="text-3xl font-black text-sky-300">150</span>
+                        <span class="text-[10px] block opacity-80 mt-0.5">+50 pts por Check-In</span>
+                    </div>
+                    <button onclick="openCheckInModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-3 rounded-2xl text-xs transition shadow-lg flex flex-col items-center justify-center">
+                        <i class="fa-solid fa-qrcode text-lg mb-1"></i>
+                        <span>Confirmar Asistencia</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- Columna Izquierda: Notificaciones Push & Consola de Alertas (2.1) -->
+                <div class="lg:col-span-5 space-y-5">
+                    
+                    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-4">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                            <h3 class="font-extrabold text-slate-900 text-sm flex items-center">
+                                <i class="fa-solid fa-bell text-indigo-600 mr-2"></i>Notificaciones Push
+                            </h3>
+                            <span class="bg-sky-50 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-sky-200">En Vivo</span>
+                        </div>
+                        
+                        <p class="text-xs text-slate-600">Servicio de alertas push que evalúa el aforo antes de tu hora programada de llegada.</p>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-sky-50/60 rounded-xl p-3 border border-sky-100">
+                            <div>
+                                <label for="push-lead-time" class="block text-[10px] font-bold text-slate-700 mb-1">Avisar antes de</label>
+                                <select id="push-lead-time" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-2 text-xs font-semibold">
+                                    <option value="15">15 minutos</option>
+                                    <option value="30" selected>30 minutos</option>
+                                    <option value="45">45 minutos</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-700 mb-1">Estado del servicio</label>
+                                <div id="push-schedule-status" class="bg-white border border-slate-300 rounded-lg px-2.5 py-2 text-[10px] font-bold text-indigo-700">Sin alerta programada</div>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-50 rounded-xl p-3.5 border border-slate-200 text-xs space-y-2">
+                            <div class="font-bold text-slate-800 flex items-center justify-between">
+                                <span>Probar Notificación Push</span>
+                                <i class="fa-solid fa-mobile-screen text-slate-400"></i>
+                            </div>
+                            <p class="text-[11px] text-slate-500">Puedes probar la alerta ahora; las alertas reales se programan automáticamente al guardar tu intención:</p>
+                            <button onclick="triggerSimulatedPush()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2 px-3 rounded-lg text-xs transition flex items-center justify-center space-x-2">
+                                <i class="fa-solid fa-paper-plane text-sky-400"></i>
+                                <span>Probar Alerta Push Ahora</span>
+                            </button>
+                        </div>
+
+                        <!-- Historial de Notificaciones Push Recibidas -->
+                        <div class="space-y-2">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Historial de Alertas Recientes</span>
+                            <div id="push-history-list" class="space-y-2 text-xs">
+                                <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                    <div class="flex justify-between font-bold text-slate-800">
+                                        <span>Aforo Óptimo (35%)</span>
+                                        <span class="text-[10px] text-slate-400">Hace 10 min</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-600 mt-1">"Es un buen momento para ir a estudiar, aforo al 35%."</p>
+                                    <span class="inline-block mt-1 text-[10px] font-bold text-indigo-700 bg-sky-50 px-2 py-0.5 rounded">Confirmado</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Insignias e Historial de Puntos -->
+                    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-3">
+                        <h3 class="font-bold text-slate-900 text-sm flex items-center">
+                            <i class="fa-solid fa-medal text-sky-500 mr-2"></i>Tus Logros e Insignias
+                        </h3>
+                        <div class="grid grid-cols-3 gap-2 text-center text-xs">
+                            <div class="p-2.5 bg-sky-50 rounded-xl border border-sky-200">
+                                <i class="fa-solid fa-clock-check text-indigo-600 text-xl block mb-1"></i>
+                                <span class="font-bold text-[11px] text-indigo-950 block">Puntual</span>
+                                <span class="text-[9px] text-indigo-700">5 Check-Ins</span>
+                            </div>
+                            <div class="p-2.5 bg-indigo-50 rounded-xl border border-indigo-200">
+                                <i class="fa-solid fa-moon text-indigo-600 text-xl block mb-1"></i>
+                                <span class="font-bold text-[11px] text-indigo-900 block">Búho Nocturno</span>
+                                <span class="text-[9px] text-indigo-700">Estudio vespertino</span>
+                            </div>
+                            <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-200 opacity-60">
+                                <i class="fa-solid fa-users text-slate-400 text-xl block mb-1"></i>
+                                <span class="font-bold text-[11px] text-slate-700 block">Colaborador</span>
+                                <span class="text-[9px] text-slate-500">Trabajo en grupo</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Columna Derecha: Catálogo de Recompensas Universitarias Gratuitas (2.3) -->
+                <div class="lg:col-span-7 space-y-5">
+                    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-4">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                            <div>
+                                <h3 class="font-extrabold text-slate-900 text-sm flex items-center">
+                                    <i class="fa-solid fa-store text-indigo-600 mr-2"></i>Catálogo de Beneficios Universitarios
+                                </h3>
+                                <p class="text-xs text-slate-500 mt-0.5">Canjea tus puntos por recompensas en las instalaciones del campus.</p>
+                            </div>
+                            <span class="bg-sky-100 text-indigo-800 text-[10px] font-bold px-2.5 py-1 rounded-full border border-sky-200">
+                                100% Gratuito
+                            </span>
+                        </div>
+
+                        <!-- Grid de Recompensas -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            
+                            <!-- Reward 1 -->
+                            <div class="border border-slate-200 rounded-2xl p-4 bg-slate-50 hover:bg-white hover:border-indigo-300 transition flex flex-col justify-between space-y-3 shadow-xs">
+                                <div class="flex items-start space-x-3">
+                                    <div class="bg-indigo-100 text-indigo-700 p-2.5 rounded-xl text-lg shrink-0">
+                                        <i class="fa-solid fa-bookmark"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-xs text-slate-900">Reserva Prioritaria de Cubículo</h4>
+                                        <p class="text-[11px] text-slate-500 mt-0.5">Aparta tu espacio de estudio silencioso con 24h de anticipación.</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between pt-2 border-t border-slate-200">
+                                    <span class="font-extrabold text-indigo-600 text-xs flex items-center">
+                                        <i class="fa-solid fa-coins mr-1"></i>100 Puntos
+                                    </span>
+                                    <button onclick="redeemReward('Reserva Prioritaria de Cubículo', 100)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition">
+                                        Canjear
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Reward 2 -->
+                            <div class="border border-slate-200 rounded-2xl p-4 bg-slate-50 hover:bg-white hover:border-indigo-300 transition flex flex-col justify-between space-y-3 shadow-xs">
+                                <div class="flex items-start space-x-3">
+                                    <div class="bg-sky-100 text-indigo-700 p-2.5 rounded-xl text-lg shrink-0">
+                                        <i class="fa-solid fa-mug-hot"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-xs text-slate-900">Descuento en Cafetería Central</h4>
+                                        <p class="text-[11px] text-slate-500 mt-0.5">Cupón del 20% de descuento en bebidas de la cafetería del campus.</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between pt-2 border-t border-slate-200">
+                                    <span class="font-extrabold text-indigo-600 text-xs flex items-center">
+                                        <i class="fa-solid fa-coins mr-1"></i>150 Puntos
+                                    </span>
+                                    <button onclick="redeemReward('Descuento en Cafetería', 150)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition">
+                                        Canjear
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Reward 3 -->
+                            <div class="border border-slate-200 rounded-2xl p-4 bg-slate-50 hover:bg-white hover:border-indigo-300 transition flex flex-col justify-between space-y-3 shadow-xs">
+                                <div class="flex items-start space-x-3">
+                                    <div class="bg-indigo-100 text-indigo-700 p-2.5 rounded-xl text-lg shrink-0">
+                                        <i class="fa-solid fa-print"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-xs text-slate-900">Paquete de Impresiones Gratis</h4>
+                                        <p class="text-[11px] text-slate-500 mt-0.5">Vale por 20 impresiones blanco y negro en la sala de computadoras.</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between pt-2 border-t border-slate-200">
+                                    <span class="font-extrabold text-indigo-600 text-xs flex items-center">
+                                        <i class="fa-solid fa-coins mr-1"></i>80 Puntos
+                                    </span>
+                                    <button onclick="redeemReward('Paquete de 20 Impresiones', 80)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition">
+                                        Canjear
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Reward 4 -->
+                            <div class="border border-slate-200 rounded-2xl p-4 bg-slate-50 hover:bg-white hover:border-indigo-300 transition flex flex-col justify-between space-y-3 shadow-xs">
+                                <div class="flex items-start space-x-3">
+                                    <div class="bg-sky-100 text-indigo-700 p-2.5 rounded-xl text-lg shrink-0">
+                                        <i class="fa-solid fa-certificate"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-xs text-slate-900">Insignia "Estudiante Ejemplar"</h4>
+                                        <p class="text-[11px] text-slate-500 mt-0.5">Distintivo especial visible en tu carné digital y comunidad.</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between pt-2 border-t border-slate-200">
+                                    <span class="font-extrabold text-indigo-600 text-xs flex items-center">
+                                        <i class="fa-solid fa-coins mr-1"></i>200 Puntos
+                                    </span>
+                                    <button onclick="redeemReward('Insignia Estudiante Ejemplar', 200)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition">
+                                        Canjear
+                                    </button>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <div id="reward-claim-alert" class="hidden p-3 bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-semibold rounded-xl flex items-center justify-between">
+                            <span id="reward-claim-msg">¡Canje realizado con éxito! Muestra tu código de confirmación en recepción.</span>
+                            <span id="reward-claim-code" class="font-mono bg-white font-bold px-2 py-1 rounded border border-indigo-200 text-[11px]">#LIB-8492</span>
+                        </div>
+                    </div>
+
+                    <!-- Bitácora de Transacciones de Puntos -->
+                    <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-3">
+                        <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Historial de Movimientos de Puntos</h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs text-slate-600">
+                                <thead class="bg-slate-50 text-slate-700 uppercase font-bold text-[10px]">
+                                    <tr>
+                                        <th class="p-2 border-b">Concepto</th>
+                                        <th class="p-2 border-b">Tipo</th>
+                                        <th class="p-2 border-b text-right">Puntos</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="points-history-body" class="divide-y divide-slate-100">
+                                    <tr>
+                                        <td class="p-2 font-medium">Bono de Bienvenida al Sistema</td>
+                                        <td class="p-2"><span class="px-2 py-0.5 rounded-full bg-sky-100 text-indigo-800 text-[10px] font-bold">Obtenido</span></td>
+                                        <td class="p-2 font-bold text-indigo-600 text-right">+100 pts</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="p-2 font-medium">Confirmación de Asistencia</td>
+                                        <td class="p-2"><span class="px-2 py-0.5 rounded-full bg-sky-100 text-indigo-800 text-[10px] font-bold">Obtenido</span></td>
+                                        <td class="p-2 font-bold text-indigo-600 text-right">+50 pts</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- ========================================== -->
+        <!-- VIEW 3: TECHNICAL M/M/c SIMULATOR -->
+        <!-- ========================================== -->
+        <div id="view-admin" class="hidden space-y-6">
+
+            <div class="bg-slate-900 text-white rounded-2xl p-5 border border-slate-800 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
+                <div>
+                    <h2 class="text-base font-bold flex items-center">
+                        <i class="fa-solid fa-calculator text-sky-400 mr-2"></i>Panel Matemático de Colas M/M/c/K
+                    </h2>
+                    <p class="text-xs text-slate-400">Verificación teórica con c = 66 puestos (55 Cubículos + 11 PCs) y capacidad máxima del sistema K</p>
+                </div>
+                <span class="px-3 py-1 bg-indigo-500/20 text-indigo-300 text-xs font-mono font-bold rounded-full border border-indigo-500/30">
+                    &mu; = 1.125 est/hr/puesto
+                </span>
+            </div>
+
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-4">
+                <div>
+                    <h3 class="text-sm font-bold text-slate-800"><i class="fa-solid fa-circle-question text-indigo-600 mr-2"></i>¿Cómo funciona nuestro modelo?</h3>
+                    <p class="text-xs text-slate-500 mt-1">Usamos un modelo de colas <b>M/M/c/K</b> para estimar cuántos puestos estarán ocupados en cada hora. Estas son sus bases:</p>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs text-slate-600">
+                    <div class="bg-slate-50 rounded-xl border border-slate-200 p-3"><div class="font-black text-indigo-600 text-base">M &middot; Llegadas</div>Los estudiantes llegan al azar (proceso de Poisson). La tasa &lambda; sale de 21,847 entradas registradas: promedio de 20.05 est/hr y pico de 26.33 est/hr entre 8 y 11 am. El perfil del resto del día es una estimación ajustada a ese promedio.</div>
+                    <div class="bg-slate-50 rounded-xl border border-slate-200 p-3"><div class="font-black text-indigo-600 text-base">M &middot; Estancia</div>El tiempo que cada estudiante se queda es aleatorio (exponencial), con promedio de 53.3 min. Eso da &mu; = 1.125 est/hr por puesto.</div>
+                    <div class="bg-slate-50 rounded-xl border border-slate-200 p-3"><div class="font-black text-indigo-600 text-base">c = 66 puestos</div>55 cubículos + 11 computadoras. Cada estudiante ocupa un puesto mientras estudia.</div>
+                    <div class="bg-slate-50 rounded-xl border border-slate-200 p-3"><div class="font-black text-indigo-600 text-base">K = 80 capacidad</div>66 puestos + 14 lugares de espera. Si llega alguien y ya hay 80 personas, no puede entrar: se <b>bloquea</b>.</div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 text-xs text-slate-600">
+                    <div class="space-y-1.5">
+                        <div class="font-bold text-slate-800">Qué calcula el modelo</div>
+                        <div class="bg-slate-50 rounded-lg border border-slate-200 p-2.5 font-mono text-[11px] text-slate-700 space-y-1">
+                            <div>P<sub>n</sub> = P<sub>0</sub> &middot; (&lambda;/&mu;)<sup>n</sup> / n! &nbsp;&nbsp;(n &le; c)</div>
+                            <div>P<sub>n</sub> = P<sub>0</sub> &middot; (&lambda;/&mu;)<sup>n</sup> / (c! &middot; c<sup>n&minus;c</sup>) &nbsp;&nbsp;(c &lt; n &le; K)</div>
+                            <div>&lambda;<sub>ef</sub> = &lambda; (1 &minus; P<sub>K</sub>) &nbsp;&nbsp;&middot;&nbsp; L = &Sigma; n&middot;P<sub>n</sub></div>
+                            <div>W = L / &lambda;<sub>ef</sub> &nbsp;&nbsp;&middot;&nbsp; W<sub>q</sub> = L<sub>q</sub> / &lambda;<sub>ef</sub></div>
+                        </div>
+                        <p>P<sub>n</sub> es la probabilidad de que haya n estudiantes en la biblioteca y P<sub>K</sub> la de que esté llena y rechace a quien llega.</p>
+                    </div>
+                    <div class="space-y-1.5">
+                        <div class="font-bold text-slate-800">Cómo lo usa la aplicación</div>
+                        <ol class="list-decimal ml-4 space-y-1">
+                            <li>Toma la tasa &lambda; de la hora elegida y suma a las personas que registraron que irán ese día, contando solo los minutos que dijeron que se quedarán.</li>
+                            <li>Calcula los puestos ocupados esperados: &lambda;<sub>ef</sub> / &mu;.</li>
+                            <li>Compara con la hora pico del propio modelo: <b class="text-sky-600">celeste</b> (menos del 55% del pico), <b class="text-indigo-600">azul</b> (normal), <b class="text-indigo-800">azul oscuro</b> (hora pico, &ge; 90% del pico) y <b class="text-slate-900">lleno</b> solo si se espera ocupar 85% o más de los 66 puestos.</li>
+                        </ol>
+                        <p>Abajo puedes ver los resultados con los valores oficiales del modelo.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- Simulator Sliders Controls -->
+                <div class="lg:col-span-5 bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-5">
+                    <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 pb-2">Parámetros del Modelo</h3>
+                    <div id="model-lock"></div>
+
+                    <!-- Lambda -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label for="sim-lambda" class="text-xs font-bold text-slate-700">Tasa de Llegadas (&lambda;):</label>
+                            <span id="sim-lambda-val" class="text-xs font-bold text-indigo-600">20.05 est/hr</span>
+                        </div>
+                        <input type="range" id="sim-lambda" min="5" max="80" step="0.5" value="20.05" oninput="runTechnicalSimulator()" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                    </div>
+
+                    <!-- Stay Duration Ws -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label for="sim-ws" class="text-xs font-bold text-slate-700">Tiempo Medio Estancia (W<sub>s</sub>):</label>
+                            <span id="sim-ws-val" class="text-xs font-bold text-indigo-600">53.3 min</span>
+                        </div>
+                        <input type="range" id="sim-ws" min="10" max="120" step="1" value="53.3" oninput="runTechnicalSimulator()" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                    </div>
+
+                    <!-- Total Capacity c -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label for="sim-c" class="text-xs font-bold text-slate-700">Puestos Totales (c):</label>
+                            <span id="sim-c-val" class="text-xs font-bold text-indigo-600">66 puestos</span>
+                        </div>
+                        <input type="range" id="sim-c" min="20" max="120" step="1" value="66" oninput="runTechnicalSimulator()" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                    </div>
+
+                    <!-- Capacidad K -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label for="sim-k" class="text-xs font-bold text-slate-700">Capacidad Máxima del Sistema (K):</label>
+                            <span id="sim-k-val" class="text-xs font-bold text-indigo-600">80</span>
+                        </div>
+                        <input type="range" id="sim-k" min="20" max="200" step="1" value="80" oninput="runTechnicalSimulator()" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                    </div>
+
+                    <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs space-y-1.5 text-slate-600">
+                        <div class="font-bold text-slate-800">Parámetros Fijos Registrados:</div>
+                        <div>&bull; Cubículos de Estudio: <b>55 puestos</b></div>
+                        <div>&bull; Sala de Computadoras: <b>11 puestos</b></div>
+                        <div>&bull; Jornada Operativa: <b>07:00 a 19:00 hrs (12h)</b></div>
+                    </div>
+                </div>
+
+                <!-- Simulator Outputs -->
+                <div class="lg:col-span-7 space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                            <span class="text-[11px] font-bold text-slate-500 block">Estudiantes en Sistema (L)</span>
+                            <span id="sim-out-L" class="text-2xl font-black text-slate-900">17.8</span>
+                            <p class="text-[10px] text-slate-400 mt-0.5">Ocupación media simulada</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                            <span class="text-[11px] font-bold text-slate-500 block">Factor de Utilización (&rho;)</span>
+                            <span id="sim-out-rho" class="text-2xl font-black text-indigo-600">27.0%</span>
+                            <p class="text-[10px] text-slate-400 mt-0.5">&rho; = &lambda; / (c &times; &mu;)</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                            <span class="text-[11px] font-bold text-slate-500 block">Tiempo de Espera (W<sub>q</sub>)</span>
+                            <span id="sim-out-Wq" class="text-2xl font-black text-slate-900">0.0 min</span>
+                            <p class="text-[10px] text-slate-400 mt-0.5">Demora en cola previo a entrar</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                            <span class="text-[11px] font-bold text-slate-500 block">Prob. de Espera (P<sub>espera</sub>)</span>
+                            <span id="sim-out-Pwait" class="text-2xl font-black text-slate-900">0.0%</span>
+                            <p class="text-[10px] text-slate-400 mt-0.5">Llega y encuentra los c puestos ocupados</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                            <span class="text-[11px] font-bold text-slate-500 block">Prob. de Bloqueo (P<sub>K</sub>)</span>
+                            <span id="sim-out-Pk" class="text-2xl font-black text-indigo-600">0.0%</span>
+                            <p class="text-[10px] text-slate-400 mt-0.5">Llega y el sistema está lleno (n = K)</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                            <span class="text-[11px] font-bold text-slate-500 block">Tasa Efectiva (&lambda;<sub>ef</sub>)</span>
+                            <span id="sim-out-leff" class="text-2xl font-black text-slate-900">0.00 est/hr</span>
+                            <p class="text-[10px] text-slate-400 mt-0.5">&lambda;<sub>ef</sub> = &lambda; (1 &minus; P<sub>K</sub>)</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-xs space-y-2">
+                        <span class="font-bold text-slate-800 block">Ecuación de Little Aplicada:</span>
+                        <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 font-mono text-indigo-800 font-bold text-center">
+                            L = &lambda;<sub>ef</sub> &times; W = <span id="little-calc">20.05 &times; 0.889 = 17.8</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- VIEW 4: REPORTES, OBJETOS PERDIDOS Y MODERACIÓN -->
+        <div id="view-reports" class="hidden space-y-5">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex bg-white border border-slate-200 rounded-xl p-1 text-xs font-bold">
+                    <button data-s="feed"><i class="fa-solid fa-table-cells-large mr-1.5"></i>Tablero</button>
+                    <button data-s="form"><i class="fa-solid fa-pen-to-square mr-1.5"></i>Reportar</button>
+                    <button data-s="mod"><i class="fa-solid fa-user-shield mr-1.5"></i>Moderación</button>
+                </div>
+                <div id="rp-modbar"></div>
+            </div>
+            <div id="rp-feed"></div><div id="rp-form" class="hidden"></div><div id="rp-mod" class="hidden"></div>
+        </div>
+    </main>
+
+    <footer class="bg-white border-t border-slate-200 mt-auto py-4 text-center text-xs text-slate-500">
+        <p class="font-medium">BiblioIng &bull; Asistente de Decisión Estudiantil Basado en Modelos de Filas de Espera</p>
+    </footer>
+
+    <script>
+        // Global State & Constants
+        const TOTAL_CUBICLES = 55;
+        const TOTAL_PCS = 11;
+        const TOTAL_CAPACITY = TOTAL_CUBICLES + TOTAL_PCS; // 66
+
+        const LAMBDA_MEAN = 20.05, LAMBDA_PEAK = 26.33, PEAK_HOURS = [8, 9, 10];
+        const HOURLY_LAMBDAS = (() => {
+            const shape = { 7: 10.2, 11: 22.4, 12: 18.5, 13: 19.2, 14: 21.5, 15: 22.1, 16: 19.8, 17: 15.4, 18: 8.5 };
+            const k = (LAMBDA_MEAN * 12 - LAMBDA_PEAK * PEAK_HOURS.length) / Object.values(shape).reduce((a, b) => a + b, 0);
+            const out = {};
+            PEAK_HOURS.forEach(h => out[h] = LAMBDA_PEAK);
+            for (const h in shape) out[h] = +(shape[h] * k).toFixed(2);
+            return out;
+        })();
+
+        // In-memory Database for Intention Registrations
+        const INTENT_KEY = 'biblio_intentions_v1';
+        const POINTS_KEY = 'biblio_user_points_v1';
+        const PUSH_KEY = 'biblio_push_schedule_v1';
+        const CHECKIN_KEY = 'biblio_checkins_v1';
+        let pushTimer = null;
+        let qrScanner = null;
+        let pendingIntention = null;
+
+        function todayStr() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+        function fmtHour(h) { return h === 12 ? '12:00 PM' : (h > 12 ? `${h - 12}:00 PM` : `${h}:00 AM`); }
+        
+        let registeredIntentions = (() => {
+            try { const r = JSON.parse(localStorage.getItem(INTENT_KEY)); if (Array.isArray(r)) return r; } catch (e) {}
+            const d = todayStr();
+            return [
+                { date: d, hour: 10, duration: 60, purpose: 'individual' },
+                { date: d, hour: 10, duration: 90, purpose: 'group' },
+                { date: d, hour: 11, duration: 45, purpose: 'pc' }
+            ];
+        })();
+        function saveIntentions() { try { localStorage.setItem(INTENT_KEY, JSON.stringify(registeredIntentions)); } catch (e) {} }
+
+        // User Points State (Persona 2)
+        let userPoints = (() => {
+            try { const p = parseInt(localStorage.getItem(POINTS_KEY)); if (!isNaN(p)) return p; } catch (e) {}
+            return 150;
+        })();
+
+        function updateUserPoints(amount, reason, type = 'Obtenido') {
+            userPoints += amount;
+            try { localStorage.setItem(POINTS_KEY, userPoints); } catch(e) {}
+            
+            const badge = document.getElementById('puntos-badge');
+            if (badge) badge.textContent = `${userPoints} pts`;
+            const disp = document.getElementById('user-points-display');
+            if (disp) disp.textContent = userPoints;
+
+            // Append to table
+            const tbody = document.getElementById('points-history-body');
+            if (tbody) {
+                const tr = document.createElement('tr');
+                const isPos = amount >= 0;
+                tr.innerHTML = `
+                    <td class="p-2 font-medium">${reason}</td>
+                    <td class="p-2"><span class="px-2 py-0.5 rounded-full ${isPos ? 'bg-sky-100 text-indigo-800' : 'bg-indigo-100 text-indigo-800'} text-[10px] font-bold">${type}</span></td>
+                    <td class="p-2 font-bold ${isPos ? 'text-indigo-600' : 'text-indigo-800'} text-right">${isPos ? '+' : ''}${amount} pts</td>
+                `;
+                tbody.insertBefore(tr, tbody.firstChild);
+            }
+        }
+
+        let lastSavedHour = null, lastSavedDate = null;
+        let studentChartInstance = null;
+        let intentionChartInstance = null;
+
+        // MODELO M/M/c/K
+        const QUEUE_SPOTS = 14;
+        const TOTAL_K = TOTAL_CAPACITY + QUEUE_SPOTS;
+        const MU_BASE = 60 / 53.33;
+
+        function mmcK(lambda, mu, c, K) {
+            K = Math.max(K, c);
+            const a = lambda / mu;
+            const t = [1];
+            for (let n = 1; n <= K; n++) t[n] = t[n - 1] * a / Math.min(n, c);
+            const Z = t.reduce((x, y) => x + y, 0);
+            const p = t.map(x => x / Z);
+            let L = 0, Lq = 0, Pwait = 0;
+            for (let n = 0; n <= K; n++) {
+                L += n * p[n];
+                if (n > c) Lq += (n - c) * p[n];
+                if (n >= c && n < K) Pwait += p[n];
+            }
+            const Pk = p[K];
+            const lamEff = lambda * (1 - Pk);
+            const busy = L - Lq;
+            const W = lamEff > 0 ? L / lamEff : 0;
+            const Wq = lamEff > 0 ? Lq / lamEff : 0;
+            return { p, L, Lq, Pk, Pwait, lamEff, busy, W, Wq, rho: lambda / (c * mu), rhoEff: lamEff / (c * mu) };
+        }
+
+        function expectedOccupied(lambda) {
+            return mmcK(lambda, MU_BASE, TOTAL_CAPACITY, TOTAL_K).busy;
+        }
+
+        function occStats(lambda, extra = 0) {
+            const m = mmcK(lambda, MU_BASE, TOTAL_CAPACITY, TOTAL_K);
+            let cum = 0, lo = 0, hi = TOTAL_CAPACITY, gotLo = false;
+            for (let n = 0; n <= TOTAL_K; n++) {
+                cum += m.p[n];
+                const b = Math.min(n, TOTAL_CAPACITY);
+                if (!gotLo && cum >= 0.1) { lo = b; gotLo = true; }
+                if (cum >= 0.9) { hi = b; break; }
+            }
+            const cap = v => Math.min(TOTAL_CAPACITY, v);
+            return { mean: cap(m.busy + extra), lo: cap(lo + Math.round(extra)), hi: cap(hi + Math.round(extra)) };
+        }
+
+        const lambdaFor = (h, isSat) => (HOURLY_LAMBDAS[h] ?? LAMBDA_MEAN) * (isSat ? 0.5 : 1);
+
+        function extraFromIntentions(dateStr, h) {
+            const s = h * 60, e = s + 60;
+            return registeredIntentions.reduce((sum, i) => {
+                if (i.date !== dateStr) return sum;
+                const a = i.hour * 60, b = a + i.duration;
+                return sum + Math.max(0, Math.min(b, e) - Math.max(a, s)) / 60;
+            }, 0);
+        }
+
+        const LEVELS = {
+            quiet:  { grad: 'from-sky-500 via-indigo-600 to-indigo-700 border-sky-400', icon: 'fa-thumbs-up', badge: 'TRANQUILO', title: '¡Buen momento para ir!', lead: 'Hay poca gente comparado con el resto del día.', color: '#38bdf8' },
+            normal: { grad: 'from-indigo-600 via-indigo-700 to-slate-800 border-indigo-400', icon: 'fa-users', badge: 'AFLUENCIA NORMAL', title: 'Conviene ir', lead: 'Afluencia media del día.', color: '#0272c4' },
+            peak:   { grad: 'from-indigo-700 via-indigo-900 to-slate-900 border-indigo-500', icon: 'fa-fire', badge: 'HORA PICO', title: 'Es de las horas más concurridas', lead: 'Hay más gente que nunca en el día, pero todavía debería haber lugar.', color: '#074d85' },
+            full:   { grad: 'from-slate-800 via-slate-900 to-black border-slate-600', icon: 'fa-triangle-exclamation', badge: 'CASI LLENA', title: 'No recomendado en este momento', lead: 'Se espera que falten puestos.', color: '#0f172a' }
+        };
+
+        function levelFor(mean) {
+            if (mean / TOTAL_CAPACITY >= 0.85) return 'full';
+            const r = mean / expectedOccupied(LAMBDA_PEAK);
+            return r >= 0.9 ? 'peak' : (r >= 0.55 ? 'normal' : 'quiet');
+        }
+
+        function paintSemaphore(ids, st) {
+            const lv = LEVELS[levelFor(st.mean)], $i = id => document.getElementById(id);
+            const free = Math.max(0, Math.round(TOTAL_CAPACITY - st.mean));
+            $i(ids.card).className = `rounded-3xl p-6 sm:p-8 text-white shadow-lg transition-all duration-300 border bg-gradient-to-br ${lv.grad}`;
+            $i(ids.icon).className = `fa-solid ${lv.icon}`;
+            $i(ids.badge).textContent = lv.badge;
+            $i(ids.title).textContent = lv.title;
+            $i(ids.advice).textContent = `${lv.lead} Se esperan unos ${free} puestos libres de ${TOTAL_CAPACITY} (lo normal: entre ${TOTAL_CAPACITY - st.hi} y ${TOTAL_CAPACITY - st.lo}).`;
+            $i(ids.pct).textContent = `${Math.round(st.mean / TOTAL_CAPACITY * 100)}%`;
+            $i(ids.count).textContent = `${Math.round(st.mean)} / ${TOTAL_CAPACITY} Puestos`;
+        }
+
+        const STUDENT_IDS = { card: 'semaphore-card', icon: 'semaphore-icon', badge: 'semaphore-badge', title: 'semaphore-title', advice: 'semaphore-advice', pct: 'semaphore-occupancy-pct', count: 'semaphore-occupancy-count' };
+        const INTENT_IDS = { card: 'intention-semaphore-card', icon: 'intention-semaphore-icon', badge: 'intention-semaphore-badge', title: 'intention-semaphore-title', advice: 'intention-semaphore-advice', pct: 'intention-semaphore-pct', count: 'intention-semaphore-count' };
+        const HOURS = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
+        const hourLabel = h => h > 12 ? `${h - 12}pm` : `${h}${h === 12 ? 'pm' : 'am'}`;
+
+        function renderBestHours(isSat) {
+            const el = document.getElementById('best-hours'); if (!el) return;
+            const occ = HOURS.map(h => ({ h, o: occStats(lambdaFor(h, isSat)).mean }));
+            const quiet = occ.slice().sort((a, b) => a.o - b.o || a.h - b.h).slice(0, 3).map(x => x.h).sort((a, b) => a - b);
+            const maxO = Math.max(...occ.map(x => x.o));
+            const peak = occ.filter(x => x.o >= 0.97 * maxO).map(x => x.h);
+            const mid = occ.filter(x => x.h >= 9 && x.h <= 16).reduce((m, x) => x.o < m.o ? x : m);
+            const chip = (txt, cls) => `<span class="px-2.5 py-1 rounded-full text-xs font-bold ${cls}">${txt}</span>`;
+            el.innerHTML = `<div class="flex flex-wrap items-center gap-2"><span class="text-xs font-bold text-slate-600 mr-1"><i class="fa-solid fa-star text-sky-500 mr-1"></i>Mejores horas del día:</span>${quiet.map(h => chip(hourLabel(h), 'bg-sky-100 text-indigo-900')).join('')}</div>
+            <p class="text-xs text-slate-600 mt-2">Si no puedes ir muy temprano ni muy tarde, lo más tranquilo en horario normal es <b>${hourLabel(mid.h)}</b>. Hora pico: <b>${hourLabel(Math.min(...peak))} a ${hourLabel(Math.max(...peak) + 1)}</b>.</p>`;
+        }
+
+        // Switch Tabs
+        function switchTab(tab) {
+            const btnStudent = document.getElementById('btn-tab-student');
+            const btnIntention = document.getElementById('btn-tab-intention');
+            const btnNotif = document.getElementById('btn-tab-notifications');
+            const btnAdmin = document.getElementById('btn-tab-admin');
+            const btnRep = document.getElementById('btn-tab-reports');
+
+            const viewStudent = document.getElementById('view-student');
+            const viewIntention = document.getElementById('view-intention');
+            const viewNotif = document.getElementById('view-notifications');
+            const viewAdmin = document.getElementById('view-admin');
+            const viewRep = document.getElementById('view-reports');
+
+            const inactiveStyle = "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-300 hover:text-white";
+            const activeStyle = "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow";
+
+            btnStudent.className = inactiveStyle;
+            btnIntention.className = inactiveStyle;
+            btnNotif.className = inactiveStyle + " relative whitespace-nowrap";
+            btnAdmin.className = inactiveStyle;
+            btnRep.className = inactiveStyle;
+
+            viewStudent.classList.add('hidden');
+            viewIntention.classList.add('hidden');
+            viewNotif.classList.add('hidden');
+            viewAdmin.classList.add('hidden');
+            viewRep.classList.add('hidden');
+
+            if (tab === 'student') {
+                btnStudent.className = activeStyle;
+                viewStudent.classList.remove('hidden');
+                recalculateStudentView();
+            } else if (tab === 'intention') {
+                btnIntention.className = activeStyle;
+                viewIntention.classList.remove('hidden');
+                renderIntentionsTable();
+                recalculateIntentionView();
+            } else if (tab === 'notifications') {
+                btnNotif.className = activeStyle + " relative whitespace-nowrap";
+                viewNotif.classList.remove('hidden');
+            } else if (tab === 'reports') {
+                btnRep.className = activeStyle;
+                viewRep.classList.remove('hidden');
+                window.rpShow();
+            } else if (tab === 'admin') {
+                btnAdmin.className = activeStyle;
+                viewAdmin.classList.remove('hidden');
+                applyModelLock();
+            }
+        }
+
+        function setCurrentTime() {
+            const now = new Date();
+            let currentHour = now.getHours();
+            if (currentHour < 7) currentHour = 7;
+            if (currentHour > 18) currentHour = 18;
+
+            const day = now.getDay();
+            document.getElementById('day-select').value = (day === 6) ? "6" : "1";
+            document.getElementById('hour-slider').value = currentHour;
+
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            document.getElementById('intent-date').value = `${yyyy}-${mm}-${dd}`;
+
+            recalculateStudentView();
+        }
+
+        function recalculateStudentView() {
+            const selectedHour = parseInt(document.getElementById('hour-slider').value);
+            const isSat = document.getElementById('day-select').value === "6";
+            document.getElementById('hour-display').textContent = fmtHour(selectedHour);
+
+            const st = occStats(lambdaFor(selectedHour, isSat));
+            const cubiclesOccupied = Math.min(TOTAL_CUBICLES, Math.round(st.mean * TOTAL_CUBICLES / TOTAL_CAPACITY));
+            const pcsOccupied = Math.min(TOTAL_PCS, Math.round(st.mean * TOTAL_PCS / TOTAL_CAPACITY));
+
+            paintSemaphore(STUDENT_IDS, st);
+            updateResourceCards(cubiclesOccupied, pcsOccupied);
+            renderMiniGrid('grid-cubicles', TOTAL_CUBICLES, cubiclesOccupied, 'bg-indigo-600');
+            renderMiniGrid('grid-pcs', TOTAL_PCS, pcsOccupied, 'bg-sky-500');
+            renderStudentHourlyChart(isSat ? "6" : "1", selectedHour);
+            renderBestHours(isSat);
+        }
+
+        function updateResourceCards(cubiclesOcc, pcsOcc) {
+            const cubFree = TOTAL_CUBICLES - cubiclesOcc;
+            const cubPctFree = Math.round((cubFree / TOTAL_CUBICLES) * 100);
+            document.getElementById('cubicles-badge').textContent = `~${cubFree} Libres`;
+            document.getElementById('cubicles-pct-text').textContent = `${cubPctFree}% Libre`;
+            document.getElementById('cubicles-bar').style.width = `${100 - cubPctFree}%`;
+
+            const pcsFree = TOTAL_PCS - pcsOcc;
+            const pcsPctFree = Math.round((pcsFree / TOTAL_PCS) * 100);
+            document.getElementById('pcs-badge').textContent = `~${pcsFree} Libres`;
+            document.getElementById('pcs-pct-text').textContent = `${pcsPctFree}% Libre`;
+            document.getElementById('pcs-bar').style.width = `${100 - pcsPctFree}%`;
+        }
+
+        function renderMiniGrid(containerId, total, occupied, colorClass) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            for (let i = 0; i < total; i++) {
+                const dot = document.createElement('div');
+                dot.className = (i < occupied) ? `h-3.5 rounded-sm ${colorClass} shadow-sm` : "h-3.5 rounded-sm bg-slate-200 border border-slate-300";
+                container.appendChild(dot);
+            }
+        }
+
+        function renderStudentHourlyChart(dayOption, selectedHour) {
+            const ctx = document.getElementById('studentHourlyChart').getContext('2d');
+            const isSat = (dayOption === "6");
+            const means = HOURS.map(h => occStats(lambdaFor(h, isSat)).mean);
+            if (studentChartInstance) studentChartInstance.destroy();
+            studentChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: HOURS.map(hourLabel),
+                    datasets: [
+                        { label: 'Ocupantes esperados', data: means.map(Math.round),
+                          backgroundColor: HOURS.map((h, i) => LEVELS[levelFor(means[i])].color + (h === selectedHour ? '' : '99')),
+                          borderColor: HOURS.map(h => h === selectedHour ? '#0f172a' : 'transparent'), borderWidth: 2, borderRadius: 4 },
+                        { type: 'line', label: 'Capacidad (66)', data: Array(12).fill(TOTAL_CAPACITY), borderColor: '#38bdf8', borderDash: [4, 4], pointRadius: 0, borderWidth: 1.5 }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { x: { grid: { display: false }, ticks: { font: { size: 10 } } }, y: { max: 70, grid: { color: '#e2e8f0' }, ticks: { font: { size: 10 } } } }
+                }
+            });
+        }
+
+        function handleIntentionSubmit(e) {
+            e.preventDefault();
+            const date = document.getElementById('intent-date').value;
+            const hour = parseInt(document.getElementById('intent-time').value);
+            const duration = parseInt(document.getElementById('intent-duration').value);
+            const purpose = document.getElementById('intent-purpose').value;
+            const lead = parseInt(document.getElementById('push-lead-time')?.value || 30);
+
+            const intention = { date, hour, duration, purpose, notifyBefore: lead, id: 'INT-' + Date.now(), status: 'scheduled' };
+            registeredIntentions.push(intention);
+            saveIntentions();
+            lastSavedHour = hour; lastSavedDate = date;
+
+            schedulePushForIntention(intention);
+            document.getElementById('intention-alert-text').textContent = `¡Registro guardado para las ${fmtHour(hour)}! La alerta se programará ${lead} minutos antes y evaluará el aforo automáticamente.`;
+            const alertBox = document.getElementById('intention-alert');
+            alertBox.classList.remove('hidden');
+            setTimeout(() => alertBox.classList.add('hidden'), 6000);
+
+            renderIntentionsTable();
+            recalculateIntentionView();
+        }
+
+        function renderIntentionsTable() {
+            const tbody = document.getElementById('intentions-table-body');
+            tbody.innerHTML = '';
+            
+            const purposeLabels = {
+                'individual': 'Estudio individual silencioso',
+                'group': 'Trabajo colaborativo en equipo',
+                'pc': 'Uso de computadoras o laboratorios'
+            };
+
+            registeredIntentions.slice().reverse().forEach(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="p-2.5 border-b font-medium">${item.date}</td>
+                    <td class="p-2.5 border-b font-bold text-indigo-700">${item.hour > 12 ? item.hour-12 + ':00 PM' : item.hour + ':00 AM'}</td>
+                    <td class="p-2.5 border-b">${item.duration} min</td>
+                    <td class="p-2.5 border-b"><span class="px-2 py-0.5 rounded-full bg-sky-50 text-indigo-800 text-[10px] font-semibold">${purposeLabels[item.purpose] || item.purpose}</span></td>
+                    <td class="p-2.5 border-b text-[10px]">${item.status === 'cancelled' ? '<span class="text-slate-500 font-bold">Cancelada</span>' : `<span class="text-indigo-700 font-bold">${item.notifyBefore || 30} min antes</span>`}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function recalculateIntentionView() {
+            const dateStr = lastSavedDate || document.getElementById('intent-date').value || todayStr();
+            const h = lastSavedHour !== null ? lastSavedHour : 10;
+            const isSat = new Date(dateStr + 'T12:00:00').getDay() === 6;
+            const st = occStats(lambdaFor(h, isSat), extraFromIntentions(dateStr, h));
+            paintSemaphore(INTENT_IDS, st);
+            renderIntentionHourlyChart(h, dateStr, isSat);
+        }
+
+        function renderIntentionHourlyChart(highlightHour, dateStr, isSat) {
+            const ctx = document.getElementById('intentionHourlyChart').getContext('2d');
+            const means = HOURS.map(h => occStats(lambdaFor(h, isSat), extraFromIntentions(dateStr, h)).mean);
+            if (intentionChartInstance) intentionChartInstance.destroy();
+            intentionChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: HOURS.map(hourLabel),
+                    datasets: [
+                        { label: 'Ocupantes esperados (histórico + intenciones)', data: means.map(Math.round),
+                          backgroundColor: HOURS.map((h, i) => LEVELS[levelFor(means[i])].color + (h === highlightHour ? '' : '99')),
+                          borderColor: HOURS.map(h => h === highlightHour ? '#0f172a' : 'transparent'), borderWidth: 2, borderRadius: 4 },
+                        { type: 'line', label: 'Capacidad (66)', data: Array(12).fill(TOTAL_CAPACITY), borderColor: '#38bdf8', borderDash: [4, 4], pointRadius: 0, borderWidth: 1.5 }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y}` } } },
+                    scales: { x: { grid: { display: false }, ticks: { font: { size: 10 } } }, y: { max: 70, grid: { color: '#e2e8f0' }, ticks: { font: { size: 10 } } } }
+                }
+            });
+        }
+
+        // ==========================================
+        // FUNCIONES: PUSH + CHECK-IN QR
+        // ==========================================
+        function calculateDynamicOccupancy(dateStr, hour) {
+            const d = new Date(dateStr + 'T12:00:00');
+            const isSat = d.getDay() === 6;
+            const extra = extraFromIntentions(dateStr, hour);
+            const st = occStats(lambdaFor(hour, isSat), extra);
+            return { pct: Math.min(100, Math.round(st.mean / TOTAL_CAPACITY * 100)), occupied: Math.round(st.mean), free: Math.max(0, TOTAL_CAPACITY - Math.round(st.mean)), level: levelFor(st.mean) };
+        }
+
+        function buildPushMessage(intention) {
+            const o = calculateDynamicOccupancy(intention.date, intention.hour);
+            let lead = '';
+            if (o.pct < 55) lead = 'Es un buen momento para ir a estudiar';
+            else if (o.pct < 85) lead = 'Hay afluencia moderada en la biblioteca';
+            else lead = 'La biblioteca está bastante concurrida; considera esperar';
+            return {
+                title: `${o.pct}% de aforo estimado`,
+                msg: `${lead}, aforo al ${o.pct}%. Se estiman ${o.occupied} de ${TOTAL_CAPACITY} puestos ocupados y ${o.free} libres.`,
+                pct: o.pct
+            };
+        }
+
+        function requestPushPermission() {
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission().catch(()=>{});
+            }
+        }
+
+        function addPushHistory(title, msg, status='Disponible') {
+            const list = document.getElementById('push-history-list');
+            if (!list) return;
+            const item = document.createElement('div');
+            item.className = 'bg-slate-50 p-3 rounded-xl border border-slate-200';
+            item.innerHTML = `<div class="flex justify-between font-bold text-slate-800"><span>${title}</span><span class="text-[10px] text-slate-400">Ahora</span></div><p class="text-[11px] text-slate-600 mt-1">"${msg}"</p><span class="inline-block mt-1 text-[10px] font-bold text-indigo-700 bg-sky-50 px-2 py-0.5 rounded">${status}</span>`;
+            list.insertBefore(item, list.firstChild);
+        }
+
+        function showPushNotification(intention, manual=false) {
+            const data = buildPushMessage(intention || { date: todayStr(), hour: parseInt(document.getElementById('intent-time')?.value || new Date().getHours()) });
+            pendingIntention = intention || null;
+            document.getElementById('push-toast-title').textContent = data.title;
+            document.getElementById('push-toast-msg').textContent = data.msg;
+            document.getElementById('push-toast').classList.remove('hidden');
+            addPushHistory(data.title, data.msg, manual ? 'Prueba manual' : 'Enviada automáticamente');
+            if ('Notification' in window && Notification.permission === 'granted') {
+                const n = new Notification('Bibliolng · Alerta de aforo', { body: data.msg, tag: 'biblio-aforo' });
+                n.onclick = () => { window.focus(); openCheckInModal(); n.close(); };
+            }
+        }
+
+        function schedulePushForIntention(intention) {
+            if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
+            requestPushPermission();
+            const target = new Date(`${intention.date}T${String(intention.hour).padStart(2,'0')}:00:00`);
+            const notifyAt = new Date(target.getTime() - intention.notifyBefore * 60000);
+            const now = new Date();
+            try { localStorage.setItem(PUSH_KEY, JSON.stringify({ ...intention, notifyAt: notifyAt.toISOString() })); } catch(e) {}
+            const status = document.getElementById('push-schedule-status');
+            if (notifyAt <= now && target > now) {
+                showPushNotification(intention);
+                if (status) status.textContent = `Alerta enviada ahora · llegada ${fmtHour(intention.hour)}`;
+                return;
+            }
+            if (target <= now) {
+                if (status) status.textContent = 'La hora programada ya pasó';
+                return;
+            }
+            const ms = notifyAt.getTime() - now.getTime();
+            pushTimer = setTimeout(() => {
+                showPushNotification(intention);
+                if (status) status.textContent = `Alerta enviada · llegada ${fmtHour(intention.hour)}`;
+            }, ms);
+            if (status) status.textContent = `Programada para ${notifyAt.toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit'})}`;
+        }
+
+        function restoreScheduledPush() {
+            let saved = null;
+            try { saved = JSON.parse(localStorage.getItem(PUSH_KEY)); } catch(e) {}
+            if (!saved) return;
+            const target = new Date(`${saved.date}T${String(saved.hour).padStart(2,'0')}:00:00`);
+            if (target > new Date()) schedulePushForIntention(saved);
+            else { const st=document.getElementById('push-schedule-status'); if(st) st.textContent='Sin alerta programada'; }
+        }
+
+        function triggerSimulatedPush() {
+            const date = document.getElementById('intent-date')?.value || todayStr();
+            const hour = parseInt(document.getElementById('intent-time')?.value || Math.min(18, Math.max(7, new Date().getHours()+1)));
+            showPushNotification({ date, hour, duration: 60, purpose: 'individual' }, true);
+        }
+
+        function dismissPushToast() { document.getElementById('push-toast').classList.add('hidden'); }
+
+        function cancelIntentionFromPush() {
+            if (pendingIntention?.id) {
+                const idx = registeredIntentions.findIndex(i => i.id === pendingIntention.id);
+                if (idx >= 0) { registeredIntentions[idx].status = 'cancelled'; saveIntentions(); renderIntentionsTable(); }
+            }
+            pendingIntention = null;
+            dismissPushToast();
+            const st=document.getElementById('push-schedule-status'); if(st) st.textContent='Intención cancelada';
+            alert('Tu intención de asistencia fue cancelada.');
+        }
+
+        function openCheckInModal() {
+            dismissPushToast();
+            const modal = document.getElementById('checkin-modal');
+            document.getElementById('checkin-alert').classList.add('hidden');
+            modal.classList.remove('hidden');
+        }
+
+        function closeCheckInModal() {
+            stopQRScanner();
+            document.getElementById('checkin-modal').classList.add('hidden');
+        }
+
+        function registerSuccessfulCheckIn(source='QR de entrada') {
+            const date = pendingIntention?.date || todayStr();
+            const hour = pendingIntention?.hour ?? new Date().getHours();
+            const key = `${date}_${hour}`;
+            let logs=[];
+            try { logs=JSON.parse(localStorage.getItem(CHECKIN_KEY))||[]; } catch(e) {}
+            if (logs.includes(key)) {
+                document.getElementById('checkin-alert-text').innerHTML = '<b>Check-In ya registrado.</b> Esta asistencia ya fue contabilizada y no vuelve a otorgar puntos.';
+                document.getElementById('checkin-alert').classList.remove('hidden');
+                return;
+            }
+            logs.push(key);
+            try { localStorage.setItem(CHECKIN_KEY, JSON.stringify(logs)); } catch(e) {}
+            updateUserPoints(50, `Confirmación de Asistencia (${source})`);
+            document.getElementById('checkin-alert-text').innerHTML = `<b>¡Asistencia confirmada!</b> Validación mediante ${source}. Has ganado <b>+50 Puntos</b>.`;
+            document.getElementById('checkin-alert').classList.remove('hidden');
+            addPushHistory('Check-In Exitoso', `Asistencia validada mediante ${source}.`, '+50 Puntos');
+            pendingIntention = null;
+            try { localStorage.removeItem(PUSH_KEY); } catch(e) {}
+            setTimeout(() => closeCheckInModal(), 2500);
+        }
+
+        function isMobileDevice() {
+            return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
+        }
+
+        function isSecureCameraContext() {
+            return window.isSecureContext || location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+        }
+
+        function simulateLibraryEntry() {
+            openCheckInModal();
+            const status = document.getElementById('qr-scan-status');
+            status.textContent = 'Entrada simulada correctamente.';
+            registerSuccessfulCheckIn('Simulación de entrada');
+        }
+
+        function startQRScanner() {
+            const status = document.getElementById('qr-scan-status');
+            if (typeof Html5Qrcode === 'undefined') {
+                status.textContent = 'No se pudo cargar el lector QR. Revisa tu conexión a Internet.';
+                return;
+            }
+            if (!isMobileDevice()) {
+                status.innerHTML = '📱 Este escáner está diseñado para abrir la <b>cámara del celular</b>. Abre Bibliolng desde tu teléfono para escanear el QR de entrada.';
+                return;
+            }
+            if (!isSecureCameraContext()) {
+                status.innerHTML = '⚠️ El navegador del celular bloquea la cámara porque esta página no está en un contexto seguro. Abre Bibliolng mediante <b>HTTPS</b> (por ejemplo, desde un servidor web) y vuelve a pulsar el botón.';
+                return;
+            }
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                status.textContent = 'Este navegador no permite acceso a la cámara. Usa Chrome o Safari actualizado en tu celular.';
+                return;
+            }
+            if (qrScanner) return;
+
+            qrScanner = new Html5Qrcode('qr-reader');
+            status.textContent = 'Solicitando permiso para usar la cámara trasera...';
+
+            const config = { fps: 10, qrbox: { width: 220, height: 220 }, aspectRatio: 1.0 };
+            const onScanSuccess = (decodedText) => {
+                if (/BIBLIO|BIBLIOTECA|ENTRADA/i.test(decodedText)) {
+                    status.textContent = 'QR de entrada reconocido.';
+                    stopQRScanner();
+                    registerSuccessfulCheckIn('QR de entrada');
+                } else {
+                    status.textContent = 'QR detectado, pero no corresponde a la entrada de la biblioteca.';
+                }
+            };
+
+            // En el celular se intenta primero la cámara trasera.
+            qrScanner.start(
+                { facingMode: { ideal: 'environment' } },
+                config,
+                onScanSuccess,
+                () => {}
+            ).catch(err => {
+                // Respaldo para navegadores que exigen seleccionar el ID de cámara.
+                Html5Qrcode.getCameras().then(cameras => {
+                    if (!cameras || !cameras.length) throw new Error('NO_CAMERA');
+                    const back = cameras.find(c => /back|rear|environment|trasera|posterior/i.test(c.label));
+                    const cameraId = (back || cameras[0]).id;
+                    return qrScanner.start(cameraId, config, onScanSuccess, () => {});
+                }).catch(fallbackErr => {
+                    qrScanner = null;
+                    const name = fallbackErr?.name || err?.name || '';
+                    if (name === 'NotAllowedError' || /permission|denied/i.test(String(fallbackErr)) || /permission|denied/i.test(String(err))) {
+                        status.textContent = 'Permiso de cámara rechazado. Actívalo en los permisos del navegador y vuelve a pulsar “Activar cámara”.';
+                    } else if (name === 'NotFoundError' || String(fallbackErr).includes('NO_CAMERA')) {
+                        status.textContent = 'No se encontró una cámara disponible en este celular.';
+                    } else {
+                        status.textContent = 'No fue posible iniciar la cámara. Verifica HTTPS, permisos y que otra aplicación no esté usando la cámara.';
+                    }
+                });
+            });
+        }
+
+        async function scanQRFromFile(event) {
+            const file = event.target.files?.[0];
+            const status = document.getElementById('qr-scan-status');
+            if (!file) return;
+            if (typeof Html5Qrcode === 'undefined') {
+                status.textContent = 'No se pudo cargar el lector QR. Revisa tu conexión a Internet.';
+                event.target.value = '';
+                return;
+            }
+            try {
+                if (qrScanner) stopQRScanner();
+                const temp = new Html5Qrcode('qr-reader');
+                status.textContent = 'Analizando la imagen...';
+                const decodedText = await temp.scanFile(file, true);
+                try { await temp.clear(); } catch(e) {}
+
+                if (/BIBLIO|BIBLIOTECA|ENTRADA/i.test(decodedText)) {
+                    status.textContent = 'QR de entrada reconocido.';
+                    registerSuccessfulCheckIn('QR de entrada desde imagen/cámara');
+                } else {
+                    status.textContent = 'QR detectado, pero no corresponde a la entrada de la biblioteca.';
+                }
+            } catch(e) {
+                status.textContent = 'No se encontró un QR válido. Toma una foto más clara y vuelve a intentarlo.';
+            } finally {
+                event.target.value = '';
+            }
+        }
+
+        function stopQRScanner() {
+            if (!qrScanner) return;
+            qrScanner.stop().then(() => qrScanner.clear()).catch(()=>{});
+            qrScanner = null;
+        }
+
+        function redeemReward(name, cost) {
+            if (userPoints < cost) {
+                alert(`No posees suficientes puntos para canjear "${name}". Te faltan ${cost - userPoints} puntos.`);
+                return;
+            }
+
+            updateUserPoints(-cost, `Canje: ${name}`, 'Canjeado');
+
+            const alertBox = document.getElementById('reward-claim-alert');
+            const code = '#LIB-' + Math.floor(1000 + Math.random() * 9000);
+            document.getElementById('reward-claim-msg').textContent = `¡Has canjeado "${name}" con éxito!`;
+            document.getElementById('reward-claim-code').textContent = code;
+            alertBox.classList.remove('hidden');
+            
+            setTimeout(() => alertBox.classList.add('hidden'), 8000);
+        }
+
+
+        // ==========================================
+        // FUNCIONES MODELO MATEMÁTICO M/M/c
+        // ==========================================
+        function runTechnicalSimulator() {
+            const lambda = parseFloat(document.getElementById('sim-lambda').value);
+            const ws = parseFloat(document.getElementById('sim-ws').value);
+            const c = parseInt(document.getElementById('sim-c').value);
+            const K = Math.max(c, parseInt(document.getElementById('sim-k').value));
+
+            document.getElementById('sim-lambda-val').textContent = `${lambda.toFixed(2)} est/hr`;
+            document.getElementById('sim-ws-val').textContent = `${ws.toFixed(1)} min`;
+            document.getElementById('sim-c-val').textContent = `${c} puestos`;
+            document.getElementById('sim-k-val').textContent = `${K} (${K - c} en espera)`;
+
+            const mu = 60 / ws;
+            const m = mmcK(lambda, mu, c, K);
+            const pct = v => `${(v * 100).toFixed(1)}%`;
+
+            document.getElementById('sim-out-L').textContent = m.L.toFixed(1);
+            document.getElementById('sim-out-rho').textContent = pct(m.rho);
+            document.getElementById('sim-out-Wq').textContent = `${(m.Wq * 60).toFixed(1)} min`;
+            document.getElementById('sim-out-Pwait').textContent = pct(m.Pwait);
+            document.getElementById('sim-out-Pk').textContent = pct(m.Pk);
+            document.getElementById('sim-out-leff').textContent = `${m.lamEff.toFixed(2)} est/hr`;
+            document.getElementById('little-calc').textContent = `${m.lamEff.toFixed(2)} × ${m.W.toFixed(3)} = ${m.L.toFixed(1)}`;
+        }
+
+        const MODEL_DEFAULTS = { 'sim-lambda': 20.05, 'sim-ws': 53.3, 'sim-c': 66, 'sim-k': 80 };
+        function applyModelLock() {
+            const m = !!(window.rpAuth && window.rpAuth.is());
+            Object.keys(MODEL_DEFAULTS).forEach(id => {
+                const el = document.getElementById(id);
+                if (!m) el.value = MODEL_DEFAULTS[id];
+                el.disabled = !m;
+                el.classList.toggle('opacity-50', !m);
+                el.classList.toggle('cursor-not-allowed', !m);
+            });
+            document.getElementById('model-lock').innerHTML = m
+                ? `<div class="flex items-center justify-between gap-2 bg-sky-50 border border-sky-200 text-sky-900 rounded-lg p-2.5 text-xs"><span><i class="fa-solid fa-lock-open mr-1.5"></i>Modo moderador: puedes ajustar los parámetros.</span><button onclick="rpAuth.logout();applyModelLock()" class="font-bold underline">Bloquear</button></div>`
+                : `<div class="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-600 space-y-2"><div><i class="fa-solid fa-lock mr-1.5 text-slate-500"></i>Valores de solo lectura. Solo moderadores pueden modificarlos.</div><div class="flex gap-1.5"><input id="model-pin" type="password" placeholder="PIN de moderador" class="inp"><button onclick="unlockModel()" class="bg-slate-900 text-white rounded-lg px-3 font-bold">Desbloquear</button></div><div id="model-pin-e" class="text-indigo-600"></div></div>`;
+            runTechnicalSimulator();
+        }
+        function unlockModel() {
+            if (window.rpAuth.login(document.getElementById('model-pin').value.trim())) applyModelLock();
+            else document.getElementById('model-pin-e').textContent = 'PIN incorrecto';
+        }
+
+        window.onload = function() {
+            setCurrentTime();
+            updateUserPoints(0, 'Carga de Sistema', 'Inicial');
+            restoreScheduledPush();
+        };
+    </script>
+<script>
+(()=>{
+const K='biblio_reports_v1',SK='biblio_supported_v1',DAY=864e5,PIN='1234';
+const C={lost:{n:'Objetos Perdidos',i:'fa-key',c:'sky',loc:'¿Dónde se te perdió o dónde crees que se te perdió?'},infra:{n:'Infraestructura',i:'fa-plug',c:'indigo',loc:'Ubicación o puesto',subs:['Banca incómoda','Enchufe averiado','Falla de internet','Otro']},complaint:{n:'Quejas / Mala Atención',i:'fa-bullhorn',c:'slate',loc:'Lugar y hora aproximada',subs:['Ruido','Mala atención del personal','Otro']},suggestion:{n:'Sugerencias',i:'fa-lightbulb',c:'sky'}};
+const $=s=>document.querySelector(s),root=$('#view-reports');
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const fd=t=>new Date(t).toLocaleDateString('es',{day:'numeric',month:'short'});
+let DB=[],sup={},mod=false,sub='feed',flt='all',sel='lost',photo='',msg='';
+const RX=['👍','👎','❤️','😡','😢'],rxn=p=>Object.values(p.rx||{}).reduce((a,b)=>a+b,0),act=p=>rxn(p)+p.com.length;
+const days=p=>p.st==='rejected'?7:(p.st==='approved'&&p.cat!=='lost'?Math.min(30+30*Math.floor(act(p)/5),180):30);
+const exp=p=>{let e=(p.at||p.cr)+days(p)*DAY;if(p.m&&p.m.s==='resolved')e=Math.min(e,p.m.t+7*DAY);return e};
+const save=()=>{try{localStorage.setItem(K,JSON.stringify(DB));return true}catch(e){return false}};
+const purge=()=>{const n=DB.length;DB=DB.filter(p=>exp(p)>Date.now());if(DB.length!==n)save();return DB.length!==n};
+const seed=()=>{const n=Date.now(),d=x=>n-x*DAY,b=()=>({sup:0,com:[],m:null,pub:true,st:'approved'});return[
+{...b(),id:1,cat:'lost',t:'Mochila negra con llavero azul',d:'Encontrada junto a la mesa 4. Se resguarda en recepción.',loc:'Sala de lectura, mesa 4',au:'Personal',cr:d(3),at:d(3)},
+{...b(),id:2,cat:'infra',sub:'Enchufe averiado',t:'Enchufes sin energía en cubículos 12 al 18',d:'Varios enchufes no funcionan y no se puede cargar la laptop.',loc:'Zona de cubículos',au:'Anónimo',cr:d(20),at:d(19),sup:6,com:[{n:'Ana',t:'A mí me pasó ayer también.',at:d(5)},{n:'Luis',t:'Es toda la fila de la ventana.',at:d(2)}],m:{s:'progress',p:'Alta',nt:'Revisar breaker',t:d(18)}},
+{...b(),id:3,cat:'complaint',sub:'Ruido',t:'Mucho ruido en la sala de lectura',d:'Grupos conversando en voz alta por las tardes.',loc:'Sala de lectura, 3 pm',au:'Anónimo',cr:d(2),at:d(2),sup:2},
+{...b(),id:4,cat:'suggestion',t:'Ampliar horario en época de exámenes',d:'Abrir hasta las 9 pm durante la semana de parciales.',au:'María',cr:d(6),at:d(6),sup:3},
+{...b(),id:5,cat:'infra',sub:'Banca incómoda',t:'Banca rota en el pasillo principal',d:'Una banca tiene el respaldo suelto.',loc:'Pasillo principal',au:'Carlos',st:'pending',pub:false,cr:d(1)}]};
+const load=()=>{try{DB=JSON.parse(localStorage.getItem(K))}catch(e){DB=null}if(!Array.isArray(DB)){DB=seed();save()}DB.forEach(p=>{if(p.sup){p.rx={...(p.rx||{}),'👍':((p.rx||{})['👍']||0)+p.sup};delete p.sup}p.rx=p.rx||{}});try{sup=JSON.parse(localStorage.getItem(SK))||{}}catch(e){sup={}}if(Array.isArray(sup)){const o={};sup.forEach(i=>o[i]='👍');sup=o}};
+const cms=p=>p.com.map(c=>`<div class="text-xs bg-slate-50 rounded-lg px-2.5 py-1.5"><b>${esc(c.n||'Anónimo')}</b> <span class="text-slate-400">${fd(c.at)}</span>${mod?` <button data-act="dc" data-id="${p.id}" data-c="${c.at}" class="no-cap text-indigo-600 ml-1"><i class="fa-solid fa-trash"></i></button>`:''}<br>${esc(c.t)}</div>`).join('');
+const mb=m=>m?`<span class="px-2 py-0.5 rounded-full ${m.s==='resolved'?'bg-sky-100 text-indigo-900':'bg-indigo-100 text-indigo-900'}"><i class="fa-solid fa-screwdriver-wrench mr-1"></i>${{derived:'Derivado a mantenimiento',progress:'En proceso',resolved:'Resuelto'}[m.s]}</span>`:'';
+const card=p=>{const k=C[p.cat],left=Math.max(0,Math.ceil((exp(p)-Date.now())/DAY)),a=act(p),ext=days(p)>30,me=sup[p.id];
+return `<article data-card data-id="${p.id}" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">${p.photo?`<img src="${p.photo}" class="w-full max-h-64 object-cover">`:''}
+<div class="p-4 space-y-2"><div class="flex flex-wrap items-center gap-1.5 text-[11px] font-bold"><span class="px-2 py-0.5 rounded-full bg-${k.c}-100 text-indigo-900"><i class="fa-solid ${k.i} mr-1"></i>${k.n}</span>${p.sub?`<span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">${esc(p.sub)}</span>`:''}${mb(p.m)}<span class="ml-auto text-slate-500"><i class="fa-regular fa-clock mr-1"></i>${left<=1?'Vence hoy':left+' días'}${ext?' · ampliado':''}</span></div>
+<h3 class="font-bold">${esc(p.t)}</h3><p class="text-sm text-slate-600">${esc(p.d)}</p>${p.loc?`<p class="text-xs text-slate-500"><i class="fa-solid fa-location-dot mr-1"></i>${esc(p.loc)}</p>`:''}
+<p class="text-[11px] text-slate-400">Por ${esc(p.au||'Anónimo')} · ${fd(p.cr)}</p>
+${p.cat!=='lost'?`<p class="text-[11px] text-indigo-600 font-semibold">${days(p)>=180?'Plazo máximo alcanzado':`${5-a%5} interacciones más para ampliar 30 días`}</p>`:''}
+<div class="flex flex-wrap gap-1.5">${RX.map(e=>`<button data-act="rx" data-id="${p.id}" data-e="${e}" class="px-2.5 py-1 rounded-full text-sm border ${me===e?'bg-indigo-100 border-indigo-400':'bg-white border-slate-300'}">${e} <span class="text-xs font-bold text-slate-600">${(p.rx||{})[e]||0}</span></button>`).join('')}</div>
+<div class="space-y-1.5">${cms(p)}</div>
+<div class="no-cap flex gap-1.5"><input class="cn inp !w-24" placeholder="Nombre"><input class="ct inp" maxlength="300" placeholder="${p.cat==='lost'?'¿Lo viste o lo encontraste? Escribe aquí…':'Escribe tu opinión…'}"><button data-act="cm" data-id="${p.id}" class="bg-indigo-600 text-white rounded-lg px-3 text-xs font-bold"><i class="fa-solid fa-paper-plane"></i></button></div>
+<div class="no-cap flex flex-wrap gap-2 pt-1"><button data-act="dl" data-id="${p.id}" class="px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-300 text-slate-700 bg-white"><i class="fa-solid fa-download mr-1"></i>Descargar imagen</button>${mod?`<button data-act="del" data-id="${p.id}" class="px-3 py-1.5 rounded-lg text-xs font-bold text-indigo-600 border border-indigo-200"><i class="fa-solid fa-trash mr-1"></i>Eliminar</button>`:''}</div></div></article>`};
+const feed=()=>{const l=DB.filter(p=>p.st==='approved'&&p.pub&&(flt==='all'||p.cat===flt)).sort((a,b)=>b.cr-a.cr);
+$('#rp-feed').innerHTML=`<div class="flex flex-wrap gap-2 mb-3">${['all',...Object.keys(C)].map(k=>`<button data-act="flt" data-k="${k}" class="px-3 py-1 rounded-full text-xs font-bold border ${flt===k?'bg-indigo-600 text-white border-indigo-600':'bg-white text-slate-600 border-slate-300'}">${k==='all'?'Todos':C[k].n}</button>`).join('')}</div>
+<p class="text-xs text-slate-500 mb-4"><i class="fa-solid fa-circle-info mr-1"></i>Cada publicación se elimina sola a los 30 días. En infraestructura, quejas y sugerencias, cada 5 interacciones (comentarios o reacciones) suman 30 días más (máx. 180). Al resolverse, quedan 7 días visibles.</p>
+<div class="grid md:grid-cols-2 gap-4 items-start">${l.map(card).join('')||'<p class="text-slate-500 text-sm">No hay publicaciones.</p>'}</div>`};
+const form=()=>{const k=C[sel],m=msg;msg='';photo='';
+$('#rp-form').innerHTML=`${m?`<div class="bg-sky-50 border border-sky-200 text-indigo-900 text-sm rounded-xl p-3 mb-4">${m}</div>`:''}
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${Object.entries(C).map(([id,c])=>`<button data-act="sel" data-k="${id}" class="p-3 rounded-2xl border-2 text-center text-xs font-bold ${sel===id?`border-indigo-500 bg-indigo-50`:'border-slate-200 bg-white'}"><i class="fa-solid ${c.i} text-xl block mb-1 text-indigo-600"></i>${c.n}</button>`).join('')}</div>
+<div class="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
+<input id="f-t" class="inp" placeholder="${sel==='lost'?'¿Qué objeto perdiste? (ej. mochila, llaves)':'Título breve'}">
+${k.subs?`<select id="f-s" class="inp">${k.subs.map(s=>`<option>${s}</option>`).join('')}</select>`:''}
+<textarea id="f-d" rows="3" class="inp" placeholder="Descripción"></textarea>
+${k.loc?`<input id="f-l" class="inp" placeholder="${k.loc}">`:''}
+${sel==='lost'||sel==='infra'?`<div><label class="text-xs font-bold text-slate-600">Foto ${sel==='lost'?'(obligatoria)':'(opcional)'}</label><br><input type="file" id="f-p" accept="image/*" class="text-xs"><img id="f-pv" class="hidden mt-2 max-h-40 rounded-lg"></div>`:''}
+<input id="f-a" class="inp" placeholder="Tu nombre (opcional)">
+<button data-act="send" class="bg-indigo-600 text-white font-bold rounded-xl px-4 py-2 text-sm"><i class="fa-solid fa-paper-plane mr-1.5"></i>Enviar reporte</button>
+<p class="text-xs text-slate-500">Un moderador lo revisa antes de publicarse.</p></div>`};
+const pend=p=>{const k=C[p.cat],d=p.cat==='infra'||p.cat==='complaint';return `<div data-card data-id="${p.id}" class="bg-white rounded-2xl border border-slate-200 p-4 space-y-2 text-sm"><div class="flex gap-3">${p.photo?`<img src="${p.photo}" class="w-24 h-24 object-cover rounded-lg">`:''}<div><span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-indigo-900">${k.n}${p.sub?' · '+esc(p.sub):''}</span><p class="font-bold mt-1">${esc(p.t)}</p><p class="text-slate-600">${esc(p.d)}</p><p class="text-xs text-slate-500">${esc(p.loc||'')} · ${esc(p.au||'Anónimo')} · ${fd(p.cr)}</p></div></div>
+<div class="flex flex-wrap items-center gap-3 text-xs bg-slate-50 rounded-lg p-2"><label><input type="checkbox" class="o-pub" checked> Publicar en tablero</label>${d?`<label><input type="checkbox" class="o-der" checked> Derivar a mantenimiento</label><select class="o-pr inp !w-auto"><option>Alta</option><option selected>Media</option><option>Baja</option></select><input class="o-nt inp !w-48" placeholder="Nota para mantenimiento">`:''}</div>
+<div class="flex gap-2"><button data-act="ok" data-id="${p.id}" class="bg-indigo-600 text-white rounded-lg px-3 py-1.5 text-xs font-bold"><i class="fa-solid fa-check mr-1"></i>Confirmar</button><button data-act="no" data-id="${p.id}" class="bg-white border border-slate-300 text-slate-700 rounded-lg px-3 py-1.5 text-xs font-bold"><i class="fa-solid fa-xmark mr-1"></i>Rechazar</button></div></div>`};
+const mrow=p=>`<div class="bg-white rounded-xl border border-slate-200 p-3 text-sm flex flex-wrap items-center gap-2"><div class="flex-1 min-w-[200px]"><b>${esc(p.t)}</b> <span class="text-xs text-slate-500">${C[p.cat].n}${p.pub?'':' · solo interno'}</span><br><span class="text-xs text-slate-600">Prioridad ${p.m.p}${p.m.nt?' · '+esc(p.m.nt):''}</span></div><span class="text-[11px] font-bold">${mb(p.m)}</span>${p.m.s!=='resolved'?`${p.m.s==='derived'?`<button data-act="ms" data-id="${p.id}" data-v="progress" class="text-xs font-bold border border-indigo-300 text-indigo-700 rounded-lg px-2.5 py-1">En proceso</button>`:''}<button data-act="ms" data-id="${p.id}" data-v="resolved" class="text-xs font-bold bg-indigo-600 text-white rounded-lg px-2.5 py-1">Resuelto</button>`:''}</div>`;
+const modv=()=>{const el=$('#rp-mod');if(!mod){el.innerHTML=`<div class="bg-white rounded-2xl border border-slate-200 p-6 max-w-sm mx-auto text-center space-y-3"><i class="fa-solid fa-user-shield text-3xl text-indigo-600"></i><p class="font-bold">Acceso para moderadores autorizados</p><input id="pin" type="password" class="inp text-center" placeholder="PIN"><button data-act="in" class="bg-indigo-600 text-white font-bold rounded-xl px-4 py-2 text-sm w-full">Entrar</button><p id="pin-e" class="text-xs text-indigo-600"></p></div>`;return}
+const P=DB.filter(p=>p.st==='pending'),M=DB.filter(p=>p.m).sort((a,b)=>(a.m.s==='resolved')-(b.m.s==='resolved')),n=[P.length,DB.filter(p=>p.st==='approved'&&p.pub).length,M.filter(p=>p.m.s!=='resolved').length,M.length-M.filter(p=>p.m.s!=='resolved').length];
+el.innerHTML=`<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">${['Pendientes','Publicadas','En mantenimiento','Resueltas'].map((t,i)=>`<div class="bg-white rounded-xl border border-slate-200 p-3 text-center"><div class="text-2xl font-black text-indigo-700">${n[i]}</div><div class="text-xs text-slate-500">${t}</div></div>`).join('')}</div>
+<h3 class="font-bold mb-2"><i class="fa-solid fa-inbox mr-1.5 text-indigo-600"></i>Buzón de aprobación</h3><div class="space-y-3 mb-6">${P.map(pend).join('')||'<p class="text-sm text-slate-500">Sin reportes pendientes.</p>'}</div>
+<h3 class="font-bold mb-2"><i class="fa-solid fa-screwdriver-wrench mr-1.5 text-indigo-600"></i>Derivaciones a mantenimiento</h3><div class="space-y-2">${M.map(mrow).join('')||'<p class="text-sm text-slate-500">Sin derivaciones.</p>'}</div>`};
+const render=()=>{purge();root.querySelectorAll('[data-s]').forEach(b=>b.className='px-3 py-1.5 rounded-lg '+(b.dataset.s===sub?'bg-indigo-600 text-white':'text-slate-600 hover:bg-slate-100'));
+$('#rp-modbar').innerHTML=mod?'<button data-act="out" class="text-xs font-bold text-slate-500"><i class="fa-solid fa-user-shield mr-1"></i>Moderador activo · Salir</button>':'';
+['feed','form','mod'].forEach(s=>$('#rp-'+s).classList.toggle('hidden',s!==sub));({feed,form,mod:modv})[sub]();window.onModChange&&window.onModChange()};
+const comp=f=>new Promise(r=>{const fr=new FileReader();fr.onload=()=>{const im=new Image();im.onload=()=>{const s=Math.min(1,800/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*s;c.height=im.height*s;c.getContext('2d').drawImage(im,0,0,c.width,c.height);r(c.toDataURL('image/jpeg',.7))};im.src=fr.result};fr.readAsDataURL(f)});
+const dl=async(el,p)=>{if(!window.html2canvas)return alert('No se cargó la librería de imágenes; usa captura de pantalla.');const c=await html2canvas(el,{scale:2,backgroundColor:'#ffffff',ignoreElements:n=>n.classList&&n.classList.contains('no-cap')});c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='reporte-'+p.id+'.png';a.click()})};
+const send=()=>{const v=s=>($(s)?.value||'').trim(),t=v('#f-t'),d=v('#f-d'),l=v('#f-l');
+if(!t||!d||(sel==='lost'&&(!l||!photo)))return alert(sel==='lost'?'Completa nombre del objeto, descripción, lugar y foto.':'Completa título y descripción.');
+const p={id:Date.now(),cat:sel,sub:v('#f-s'),t,d,loc:l,au:v('#f-a'),photo,st:'pending',pub:false,cr:Date.now(),rx:{},com:[],m:null};DB.push(p);
+if(!save()){p.photo='';save();msg='Almacenamiento lleno: se guardó sin foto. '}msg+='✅ Reporte enviado. Se publicará cuando un moderador lo apruebe.';render()};
+root.addEventListener('click',async e=>{const s=e.target.closest('[data-s]');if(s){sub=s.dataset.s;render();return}
+const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act,id=+b.dataset.id,p=DB.find(x=>x.id===id),cd=b.closest('[data-card]');
+if(['dc','del','ok','no','ms'].includes(a)&&!mod)return;
+if(a==='flt')flt=b.dataset.k;else if(a==='sel')sel=b.dataset.k;
+else if(a==='in'){if($('#pin').value===PIN)mod=true;else{$('#pin-e').textContent='PIN incorrecto';return}}
+else if(a==='out')mod=false;
+else if(a==='rx'&&p){const e2=b.dataset.e,cur=sup[id];p.rx=p.rx||{};if(cur){p.rx[cur]=Math.max(0,(p.rx[cur]||1)-1);delete sup[id]}if(cur!==e2){p.rx[e2]=(p.rx[e2]||0)+1;sup[id]=e2}try{localStorage.setItem(SK,JSON.stringify(sup))}catch(x){}}
+else if(a==='cm'&&p){const t=cd.querySelector('.ct').value.trim();if(!t)return;p.com.push({n:cd.querySelector('.cn').value.trim(),t,at:Date.now()})}
+else if(a==='dc'&&p)p.com=p.com.filter(c=>c.at!=b.dataset.c);
+else if(a==='del'&&p){if(!confirm('¿Eliminar esta publicación?'))return;DB=DB.filter(x=>x!==p)}
+else if(a==='ok'&&p){const pub=cd.querySelector('.o-pub').checked,dv=cd.querySelector('.o-der');const der=dv&&dv.checked;if(!pub&&!der)return alert('Elige publicar o derivar.');
+p.st='approved';p.pub=pub;p.at=Date.now();if(der)p.m={s:'derived',p:cd.querySelector('.o-pr').value,nt:cd.querySelector('.o-nt').value.trim(),t:Date.now()}}
+else if(a==='no'&&p){if(prompt('Motivo del rechazo (opcional)')===null)return;p.st='rejected';p.at=Date.now()}
+else if(a==='ms'&&p){p.m.s=b.dataset.v;p.m.t=Date.now()}
+else if(a==='dl'&&p){await dl(cd,p);return}
+else if(a==='send'){send();return}
+save();render()});
+root.addEventListener('change',async e=>{if(e.target.id==='f-p'&&e.target.files[0]){photo=await comp(e.target.files[0]);const i=$('#f-pv');i.src=photo;i.classList.remove('hidden')}});
+root.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.classList.contains('ct'))e.target.closest('[data-card]').querySelector('[data-act=cm]').click()});
+load();window.rpAuth={is:()=>mod,login:p=>{if(p===PIN){mod=true;return true}return false},logout:()=>{mod=false}};window.rpShow=render;setInterval(()=>{if(purge()&&!root.classList.contains('hidden'))render()},6e4);
+})();
+</script>
+</body>
+</html>
