@@ -1,0 +1,177 @@
+name: Generar APK Android
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Copiar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Crear estructura de proyecto Android nativo WebView
+        run: |
+          mkdir -p android-app/app/src/main/assets/
+          mkdir -p android-app/app/src/main/res/mipmap-hdpi/
+          mkdir -p android-app/app/src/main/res/values/
+          
+          # Copiar el archivo HTML
+          cp index.html android-app/app/src/main/assets/index.html
+
+          # Crear AndroidManifest.xml con permisos de Cámara e Internet
+          cat << 'EOF' > android-app/app/src/main/AndroidManifest.xml
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.biblioteca.app">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="BiblioIng"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.AppCompat.NoActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # Crear MainActivity en Java para cargar la Web y dar permisos
+          cat << 'EOF' > android-app/app/src/main/java/com/biblioteca/app/MainActivity.java
+          package com.biblioteca.app;
+          import android.Manifest;
+          import android.app.Activity;
+          import android.content.pm.PackageManager;
+          import android.os.Bundle;
+          import android.webkit.PermissionRequest;
+          import android.webkit.WebChromeClient;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import androidx.core.app.ActivityCompat;
+          import androidx.core.content.ContextCompat;
+
+          public class MainActivity extends Activity {
+              private WebView webView;
+              private static final int CAMERA_PERMISSION_CODE = 100;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  
+                  if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                      ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_CODE);
+                  }
+
+                  webView = new WebView(this);
+                  WebSettings settings = webView.getSettings();
+                  settings.setJavaScriptEnabled(true);
+                  settings.setDomStorageEnabled(true);
+                  settings.setDatabaseEnabled(true);
+                  settings.setAllowFileAccess(true);
+                  settings.setMediaPlaybackRequiresUserGesture(false);
+
+                  webView.setWebViewClient(new WebViewClient());
+                  webView.setWebChromeClient(new WebChromeClient() {
+                      @Override
+                      public void onPermissionRequest(PermissionRequest request) {
+                          request.grant(request.getResources());
+                      }
+                  });
+
+                  webView.loadUrl("file:///android_asset/index.html");
+                  setContentView(webView);
+              }
+
+              @Override
+              public void onBackPressed() {
+                  if (webView.canGoBack()) {
+                      webView.goBack();
+                  } else {
+                      super.onBackPressed();
+                  }
+              }
+          }
+          EOF
+
+          # Configurar build.gradle del proyecto
+          cat << 'EOF' > android-app/build.gradle
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:7.4.2'
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          EOF
+
+          cat << 'EOF' > android-app/settings.gradle
+          include ':app'
+          rootProject.name = "BiblioIngApp"
+          EOF
+
+          cat << 'EOF' > android-app/app/build.gradle
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              compileSdk 33
+              defaultConfig {
+                  applicationId "com.biblioteca.app"
+                  minSdk 21
+                  targetSdk 33
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }
+          EOF
+
+      - name: Configurar Java 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Compilar APK
+        run: |
+          cd android-app
+          chmod +x gradlew || true
+          gradle wrapper
+          ./gradlew assembleDebug
+
+      - name: Subir APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-biblioteca-debug
+          path: android-app/app/build/outputs/apk/debug/app-debug.apk
